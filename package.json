@@ -1,0 +1,13 @@
+{
+  "name": "quran-school-manager",
+  "version": "1.0.0",
+  "description": "نظام إدارة المدرسة القرآنية",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "electron": "^29.0.0"
+  }
+}
