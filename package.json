@@ -4,10 +4,38 @@
   "description": "نظام إدارة المدرسة القرآنية",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.quran.school",
+    "productName": "نظام المدرسة القرآنية",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "./ChatGPT Image 24 avr. 2026, 23_49_54.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": ["ar"],
+      "language": "1025"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "node_modules/**",
+      "package.json"
+    ]
   },
   "dependencies": {
-    "sql.js": "^1.12.0",
-    "electron": "^29.0.0"
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0"
   }
 }

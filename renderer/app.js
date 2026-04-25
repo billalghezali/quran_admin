@@ -1,55 +1,121 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   نظام إدارة المدرسة القرآنية — app.js
+   نظام إدارة المدرسة القرآنية v2.0 — app.js
    ═══════════════════════════════════════════════════════════════════════ */
 
+// ── Utils ──────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const el = (tag, cls, html = '') => Object.assign(document.createElement(tag), { className: cls, innerHTML: html });
+
+// أرقام عربية
+const toAr = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+
+// التاريخ الهجري
+function getHijri(date = new Date()) {
+  return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
+    day:'numeric', month:'long', year:'numeric'
+  }).format(date);
+}
+
+// التاريخ الميلادي بالعربية
+function getMiladi(date = new Date()) {
+  return date.toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+// تحديث شريط التاريخ
+function updateDates() {
+  const el = $('topbar-dates');
+  if (!el) return;
+  el.innerHTML = `
+    <span>📅 ${getMiladi()}</span>
+    <span style="color:var(--border2)">|</span>
+    <span>🌙 ${getHijri()}</span>`;
+}
+updateDates();
+setInterval(updateDates, 60000);
 
 // ── Toast ──────────────────────────────────────────────────────────────
-let toastTimer;
-function showToast(msg, type = 'success') {
-  clearTimeout(toastTimer);
-  const icons = { success: '✓', error: '✕' };
+let _toastT;
+function toast(msg, type = 'success') {
+  clearTimeout(_toastT);
   const t = $('toast');
-  t.innerHTML = `<span>${icons[type] || '•'}</span> ${msg}`;
+  t.innerHTML = `<span>${type==='success'?'✓':'✕'}</span> ${msg}`;
   t.className = `toast ${type}`;
-  toastTimer = setTimeout(() => t.classList.add('hidden'), 3000);
+  _toastT = setTimeout(() => t.classList.add('hidden'), 3000);
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────
-function openModal(title, bodyHTML) {
+function openModal(title, html) {
   $('modal-title').textContent = title;
-  $('modal-body').innerHTML = bodyHTML;
+  $('modal-body').innerHTML = html;
   $('modal-overlay').classList.remove('hidden');
 }
 function closeModal() {
   $('modal-overlay').classList.add('hidden');
-  $('modal-body').innerHTML = '';
+  setTimeout(() => { $('modal-body').innerHTML = ''; }, 200);
 }
 $('modal-close').addEventListener('click', closeModal);
 $('modal-overlay').addEventListener('click', e => { if (e.target === $('modal-overlay')) closeModal(); });
 
 // ── Print ──────────────────────────────────────────────────────────────
-function printContent(html) {
-  $('print-area').innerHTML = html;
-  window.print();
+function doPrint(html) { $('print-area').innerHTML = html; window.print(); }
+
+// ── Session (Teacher Login) ────────────────────────────────────────────
+let SESSION = { id: null, name: '', role: 'admin' }; // role: admin | teacher
+
+async function initLogin() {
+  const teachers = await window.api.getTeachers();
+  const sel = $('login-who');
+  teachers.forEach(t => {
+    const o = document.createElement('option');
+    o.value = `teacher_${t.id}`;
+    o.textContent = `👨‍🏫 ${t.name}`;
+    sel.appendChild(o);
+  });
+
+  $('login-btn').addEventListener('click', () => {
+    const val = sel.value;
+    if (!val) return;
+    if (val === 'admin') {
+      SESSION = { id: null, name: 'المدير', role: 'admin' };
+    } else {
+      const tid = Number(val.replace('teacher_', ''));
+      const t = teachers.find(x => x.id === tid);
+      SESSION = { id: tid, name: t.name, role: 'teacher' };
+    }
+    startApp();
+  });
 }
 
-// ── Date ───────────────────────────────────────────────────────────────
-function updateDate() {
-  const now = new Date();
-  $('topbar-date').textContent = now.toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+function startApp() {
+  $('login-screen').classList.add('hidden');
+  $('app').classList.remove('hidden');
+
+  $('session-name').textContent = SESSION.name;
+  $('session-role').textContent = SESSION.role === 'admin' ? '🔑 مدير النظام' : '🎓 أستاذ';
+  $('session-avatar').textContent = SESSION.role === 'admin' ? '🔑' : '👨‍🏫';
+
+  // إخفاء قسم الأساتذة للأستاذ
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = SESSION.role === 'admin' ? '' : 'none';
+  });
+
+  pages.dashboard();
+  updateBadges();
 }
-updateDate();
-setInterval(updateDate, 60000);
+
+$('btn-logout').addEventListener('click', () => {
+  SESSION = { id: null, name: '', role: 'admin' };
+  $('app').classList.add('hidden');
+  $('login-screen').classList.remove('hidden');
+  $('login-who').value = '';
+  currentPage = 'dashboard';
+});
 
 // ── Router ─────────────────────────────────────────────────────────────
 const PAGE_TITLES = {
-  dashboard: 'لوحة التحكم', students: 'إدارة الطلاب',
-  teachers: 'إدارة الأساتذة', memorization: 'تسجيل الحفظ',
-  attendance: 'الحضور والغياب', reports: 'التقارير'
+  dashboard:'لوحة التحكم', students:'الطلاب',
+  teachers:'الأساتذة', memorization:'تسجيل الحفظ',
+  attendance:'الحضور والغياب', reports:'التقارير'
 };
-
 const pages = {};
 let currentPage = 'dashboard';
 
@@ -67,15 +133,26 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
-$('btn-refresh').addEventListener('click', () => pages[currentPage]?.());
+$('btn-refresh').addEventListener('click', () => {
+  $('btn-refresh').style.transform = 'rotate(360deg)';
+  setTimeout(() => $('btn-refresh').style.transform = '', 400);
+  pages[currentPage]?.();
+});
 
-// ── Nav counts ─────────────────────────────────────────────────────────
-async function updateNavCounts() {
+async function updateBadges() {
   try {
-    const stats = await window.api.getDashboardStats();
-    $('nav-count-students').textContent = stats.totalStudents;
-    $('nav-count-teachers').textContent = stats.totalTeachers;
+    const stats = await window.api.getDashboardStats(SESSION.id);
+    $('nb-students').textContent = toAr(stats.totalStudents);
+    $('nb-teachers').textContent = toAr(stats.totalTeachers);
   } catch(e) {}
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+const badgeCls = g => ({ ممتاز:'bg', جيد:'bb', مقبول:'bo', ضعيف:'br' }[g] || 'bk');
+const pctBadge = p => p >= 75 ? 'bg' : p >= 40 ? 'bo' : 'br';
+
+function printBtn(label = '🖨️ طباعة') {
+  return `<button class="btn btn-print btn-sm" id="_pb">${label}</button>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -83,171 +160,122 @@ async function updateNavCounts() {
 // ═══════════════════════════════════════════════════════════════════════
 pages.dashboard = async () => {
   const pg = $('page-dashboard');
-  pg.innerHTML = `
-    <div class="stats-grid stagger" id="stat-grid"></div>
+  pg.innerHTML = `<div class="stats-grid" id="sg"></div>
     <div class="dash-grid">
-      <div class="card">
-        <div class="card-title">
-          <div class="card-icon" style="background:var(--green-pale)">🏆</div>
-          أفضل الطلاب حفظاً
-        </div>
-        <div class="top-list" id="top-students"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">
-          <div class="card-icon" style="background:var(--blue-pale)">📋</div>
-          آخر جلسات الحفظ
-        </div>
-        <div class="activity-list" id="recent-act"></div>
-      </div>
+      <div class="card"><div class="card-t"><div class="card-ico" style="background:var(--green-p)">🏆</div>أفضل الطلاب</div><div id="top"></div></div>
+      <div class="card"><div class="card-t"><div class="card-ico" style="background:var(--blue-p)">📋</div>آخر جلسات الحفظ</div><div id="act"></div></div>
     </div>`;
 
-  const d = await window.api.getDashboardStats();
-  updateNavCounts();
+  const d = await window.api.getDashboardStats(SESSION.id);
+  updateBadges();
 
-  const statCards = [
-    { cls:'green', icon:'👥', label:'إجمالي الطلاب', val: d.totalStudents, trend:'مسجّل في النظام' },
-    { cls:'blue',  icon:'🎓', label:'الأساتذة',      val: d.totalTeachers, trend:'كادر التدريس' },
-    { cls:'gold',  icon:'✅', label:'حضور اليوم',    val: d.todayPresent,  trend:'الجلسة الحالية' },
-    { cls:'red',   icon:'📖', label:'جلسات الحفظ',  val: d.totalSessions, trend:'إجمالي الجلسات' },
-  ];
-  $('stat-grid').innerHTML = statCards.map(s => `
-    <div class="stat-card ${s.cls}">
-      <div class="stat-bg-icon">${s.icon}</div>
-      <div class="stat-label">${s.label}</div>
-      <div class="stat-value">${s.val}</div>
-      <div class="stat-trend">${s.trend}</div>
-    </div>`).join('');
+  $('sg').innerHTML = [
+    { cls:'sc-green', ico:'👥', lbl:'الطلاب',        val:d.totalStudents },
+    { cls:'sc-blue',  ico:'🎓', lbl:'الأساتذة',      val:d.totalTeachers },
+    { cls:'sc-gold',  ico:'✅', lbl:'حضور اليوم',    val:d.todayPresent  },
+    { cls:'sc-red',   ico:'📖', lbl:'جلسات الحفظ',   val:d.totalSessions },
+  ].map(s => `<div class="stat-card ${s.cls}">
+    <div class="stat-bg">${s.ico}</div>
+    <div class="stat-lbl">${s.lbl}</div>
+    <div class="stat-val">${toAr(s.val)}</div>
+  </div>`).join('');
 
-  $('top-students').innerHTML = d.topStudents.length
-    ? d.topStudents.map((s, i) => `
+  $('top').innerHTML = d.topStudents.length
+    ? d.topStudents.map((s,i) => `
         <div class="top-item">
-          <div class="top-rank r${i+1}">${i+1}</div>
-          <div class="top-name">${s.name}</div>
-          <span class="badge badge-green">${s.cnt} سورة</span>
+          <div class="top-rank ${['r1','r2','r3'][i]||''}">${toAr(i+1)}</div>
+          <div style="flex:1;font-weight:700">${s.name}</div>
+          <span class="badge bg">${toAr(s.cnt)} سورة</span>
         </div>`).join('')
-    : `<div class="empty"><div class="empty-icon">🎓</div><div class="empty-sub">ابدأ بتسجيل الحفظ</div></div>`;
+    : `<div class="empty"><div class="empty-ico">🎓</div><div class="empty-s">لا يوجد بيانات بعد</div></div>`;
 
-  $('recent-act').innerHTML = d.recentActivity.length
+  $('act').innerHTML = d.recentActivity.length
     ? d.recentActivity.map(r => `
-        <div class="activity-item">
-          <div class="activity-dot"></div>
-          <div class="activity-text"><b>${r.student}</b> — حفظ سورة ${r.surah}</div>
-          <span class="badge badge-${r.grade==='ممتاز'?'green':r.grade==='جيد'?'blue':'gold'}">${r.grade}</span>
+        <div class="act-item">
+          <div class="act-dot"></div>
+          <div class="act-txt"><b>${r.student}</b> — سورة ${r.surah}</div>
+          <span class="badge ${badgeCls(r.grade)}">${r.grade}</span>
         </div>`).join('')
-    : `<div class="empty"><div class="empty-icon">📋</div><div class="empty-sub">لا يوجد نشاطات بعد</div></div>`;
+    : `<div class="empty"><div class="empty-ico">📋</div><div class="empty-s">لا يوجد نشاطات</div></div>`;
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// 2. TEACHERS
+// 2. TEACHERS (admin only)
 // ═══════════════════════════════════════════════════════════════════════
 pages.teachers = async () => {
+  if (SESSION.role !== 'admin') { pages.dashboard(); return; }
   const pg = $('page-teachers');
   pg.innerHTML = `
-    <div class="page-header">
-      <div>
-        <div class="page-title">الأساتذة</div>
-        <div class="page-subtitle">إدارة الكادر التدريسي للمدرسة</div>
+    <div class="ph">
+      <div><div class="ph-title">الأساتذة</div><div class="ph-sub">إدارة كادر التدريس</div></div>
+      <div class="ph-actions">
+        ${printBtn('🖨️ طباعة')}
+        <button class="btn btn-primary" id="ba">＋ إضافة أستاذ</button>
       </div>
-      <button class="btn btn-primary" id="btn-add-teacher">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        إضافة أستاذ
-      </button>
     </div>
     <div class="card">
-      <div class="toolbar">
-        <div class="search-box">
-          <span class="search-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-          <input class="input" id="teacher-search" placeholder="ابحث عن أستاذ..." style="padding-right:38px">
-        </div>
-        <button class="btn btn-print" id="btn-print-teachers">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          طباعة
-        </button>
+      <div class="tb">
+        <div class="sb"><span class="sb-ico">🔍</span><input class="inp" id="ts" placeholder="بحث..." style="padding-right:34px"></div>
       </div>
-      <div id="teachers-table"></div>
+      <div id="tt"></div>
     </div>`;
 
   let teachers = [];
-  const render = (list) => {
-    $('teachers-table').innerHTML = list.length ? `
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>التخصص</th><th>عدد الطلاب</th><th>الإجراءات</th></tr></thead>
-          <tbody>${list.map((t,i) => `
-            <tr>
-              <td><span class="badge badge-gray">${i+1}</span></td>
-              <td><div class="td-name">${t.name}</div></td>
-              <td>${t.phone || '<span class="badge badge-gray">—</span>'}</td>
-              <td>${t.specialization ? `<span class="badge badge-blue">${t.specialization}</span>` : '<span class="badge badge-gray">—</span>'}</td>
-              <td><span class="badge badge-green">${t.student_count} طالب</span></td>
-              <td>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-secondary btn-xs btn-edit-teacher" data-id="${t.id}">✏️ تعديل</button>
-                  <button class="btn btn-danger btn-xs btn-del-teacher" data-id="${t.id}">🗑️</button>
-                </div>
-              </td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`
-      : `<div class="empty"><div class="empty-icon">🎓</div><div class="empty-title">لا يوجد أساتذة</div><div class="empty-sub">ابدأ بإضافة أستاذ جديد</div></div>`;
+  const render = list => {
+    $('tt').innerHTML = list.length ? `<div class="tw"><table>
+      <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>التخصص</th><th>الطلاب</th><th>إجراءات</th></tr></thead>
+      <tbody>${list.map((t,i) => `<tr>
+        <td><span class="badge bk">${toAr(i+1)}</span></td>
+        <td><div class="td-name">${t.name}</div></td>
+        <td>${t.phone||'—'}</td>
+        <td>${t.specialization?`<span class="badge bb">${t.specialization}`:'—'}</td>
+        <td><span class="badge bg">${toAr(t.student_count)} طالب</span></td>
+        <td><div style="display:flex;gap:5px">
+          <button class="btn btn-secondary btn-xs _et" data-id="${t.id}">✏️</button>
+          <button class="btn btn-danger btn-xs _dt" data-id="${t.id}">🗑️</button>
+        </div></td>
+      </tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty"><div class="empty-ico">🎓</div><div class="empty-t">لا يوجد أساتذة</div></div>`;
 
-    pg.querySelectorAll('.btn-edit-teacher').forEach(b => b.addEventListener('click', () =>
-      teacherModal(teachers.find(t => t.id == b.dataset.id), load)));
-    pg.querySelectorAll('.btn-del-teacher').forEach(b => b.addEventListener('click', () => delTeacher(b.dataset.id)));
+    pg.querySelectorAll('._et').forEach(b => b.addEventListener('click', () => teacherModal(teachers.find(t=>t.id==b.dataset.id), load)));
+    pg.querySelectorAll('._dt').forEach(b => b.addEventListener('click', () => delTeacher(b.dataset.id)));
   };
 
-  const load = async () => { teachers = await window.api.getTeachers(); render(teachers); updateNavCounts(); };
+  const load = async () => { teachers = await window.api.getTeachers(); render(teachers); updateBadges(); };
   await load();
 
-  $('teacher-search').addEventListener('input', e =>
-    render(teachers.filter(t => t.name.includes(e.target.value) || (t.specialization||'').includes(e.target.value))));
-  $('btn-add-teacher').addEventListener('click', () => teacherModal(null, load));
-  $('btn-print-teachers').addEventListener('click', () => printTeachers(teachers));
+  $('ts').addEventListener('input', e => render(teachers.filter(t => t.name.includes(e.target.value))));
+  $('ba').addEventListener('click', () => teacherModal(null, load));
+  $('_pb').addEventListener('click', () => doPrint(`
+    <div class="ph"><h1>قائمة الأساتذة</h1><p>المدرسة القرآنية — ${getMiladi()} — ${getHijri()}</p></div>
+    <table><thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>التخصص</th><th>عدد الطلاب</th></tr></thead>
+    <tbody>${teachers.map((t,i)=>`<tr><td>${i+1}</td><td>${t.name}</td><td>${t.phone||'—'}</td><td>${t.specialization||'—'}</td><td>${t.student_count}</td></tr>`).join('')}</tbody></table>
+    <div class="pf">الإجمالي: ${teachers.length} أستاذ</div>`));
 
-  const delTeacher = async (id) => {
-    if (!confirm('هل تريد حذف هذا الأستاذ؟')) return;
-    await window.api.deleteTeacher(Number(id));
-    showToast('تم حذف الأستاذ بنجاح');
-    load();
+  const delTeacher = async id => {
+    if (!confirm('حذف هذا الأستاذ؟')) return;
+    await window.api.deleteTeacher(Number(id)); toast('تم الحذف'); load();
   };
 };
 
-function printTeachers(teachers) {
-  printContent(`
-    <div class="print-header">
-      <h1>قائمة الأساتذة</h1>
-      <p>المدرسة القرآنية — تاريخ الطباعة: ${new Date().toLocaleDateString('ar-DZ')}</p>
-    </div>
-    <table class="print-table">
-      <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>التخصص</th><th>عدد الطلاب</th></tr></thead>
-      <tbody>${teachers.map((t,i) => `
-        <tr><td>${i+1}</td><td>${t.name}</td><td>${t.phone||'—'}</td><td>${t.specialization||'—'}</td><td>${t.student_count}</td></tr>`).join('')}
-      </tbody>
-    </table>
-    <div class="print-footer">إجمالي الأساتذة: ${teachers.length}</div>`);
-}
-
 function teacherModal(data, onDone) {
-  openModal(data ? 'تعديل بيانات الأستاذ' : 'إضافة أستاذ جديد', `
-    <div class="form-group"><label>الاسم الكامل *</label><input class="input" id="t-name" value="${data?.name||''}" placeholder="أدخل الاسم الكامل"></div>
-    <div class="form-row">
-      <div class="form-group"><label>رقم الهاتف</label><input class="input" id="t-phone" value="${data?.phone||''}" placeholder="0xx xxx xxxx"></div>
-      <div class="form-group"><label>التخصص</label><input class="input" id="t-spec" value="${data?.specialization||''}" placeholder="مثل: حفظ وتجويد"></div>
+  openModal(data ? 'تعديل الأستاذ' : 'إضافة أستاذ', `
+    <div class="fg"><label>الاسم *</label><input class="inp" id="tn" value="${data?.name||''}" placeholder="الاسم الكامل"></div>
+    <div class="fr">
+      <div class="fg"><label>الهاتف</label><input class="inp" id="tp" value="${data?.phone||''}"></div>
+      <div class="fg"><label>التخصص</label><input class="inp" id="ts2" value="${data?.specialization||''}" placeholder="حفظ وتجويد"></div>
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
-      <button class="btn btn-secondary" id="t-cancel">إلغاء</button>
-      <button class="btn btn-primary" id="t-save">💾 حفظ</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-secondary" id="_c">إلغاء</button>
+      <button class="btn btn-primary" id="_s">💾 حفظ</button>
     </div>`);
-  $('t-cancel').addEventListener('click', closeModal);
-  $('t-save').addEventListener('click', async () => {
-    const name = $('t-name').value.trim();
-    if (!name) return showToast('الاسم مطلوب', 'error');
-    if (data) await window.api.updateTeacher({ id: data.id, name, phone: $('t-phone').value, specialization: $('t-spec').value });
-    else await window.api.addTeacher({ name, phone: $('t-phone').value, specialization: $('t-spec').value });
-    showToast(data ? 'تم تحديث بيانات الأستاذ ✓' : 'تم إضافة الأستاذ بنجاح ✓');
-    closeModal(); onDone();
+  $('_c').addEventListener('click', closeModal);
+  $('_s').addEventListener('click', async () => {
+    const name = $('tn').value.trim();
+    if (!name) return toast('الاسم مطلوب', 'error');
+    data ? await window.api.updateTeacher({ id:data.id, name, phone:$('tp').value, specialization:$('ts2').value })
+          : await window.api.addTeacher({ name, phone:$('tp').value, specialization:$('ts2').value });
+    toast(data ? 'تم التحديث ✓' : 'تم الإضافة ✓'); closeModal(); onDone();
   });
 }
 
@@ -256,251 +284,199 @@ function teacherModal(data, onDone) {
 // ═══════════════════════════════════════════════════════════════════════
 pages.students = async () => {
   const pg = $('page-students');
+  const isAdmin = SESSION.role === 'admin';
   pg.innerHTML = `
-    <div class="page-header">
+    <div class="ph">
       <div>
-        <div class="page-title">الطلاب</div>
-        <div class="page-subtitle">إدارة الطلاب وتتبع تقدمهم في الحفظ</div>
+        <div class="ph-title">${isAdmin ? 'كل الطلاب' : `طلاب الأستاذ: ${SESSION.name}`}</div>
+        <div class="ph-sub">${isAdmin ? 'عرض وإدارة جميع الطلاب' : 'مجموعتك فقط'}</div>
       </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-print" id="btn-print-students">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          طباعة القائمة
-        </button>
-        <button class="btn btn-primary" id="btn-add-student">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          إضافة طالب
-        </button>
+      <div class="ph-actions">
+        ${printBtn('🖨️ قائمة')}
+        ${isAdmin ? '<button class="btn btn-primary" id="_as">＋ إضافة طالب</button>' : ''}
       </div>
     </div>
     <div class="card">
-      <div class="toolbar">
-        <div class="search-box">
-          <span class="search-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-          <input class="input" id="student-search" placeholder="ابحث عن طالب..." style="padding-right:38px">
-        </div>
-        <select class="input" id="filter-teacher" style="width:auto;min-width:160px">
-          <option value="">كل الأساتذة</option>
-        </select>
+      <div class="tb">
+        <div class="sb"><span class="sb-ico">🔍</span><input class="inp" id="_sq" placeholder="ابحث عن طالب..." style="padding-right:34px"></div>
+        ${isAdmin ? `<select class="inp" id="_ft" style="width:auto;min-width:150px"><option value="">كل الأساتذة</option></select>` : ''}
       </div>
-      <div id="students-table"></div>
+      <div id="_st"></div>
     </div>`;
 
   let students = [], teachers = [];
 
-  const render = (list) => {
-    $('students-table').innerHTML = list.length ? `
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>#</th><th>الطالب</th><th>العمر</th><th>الأستاذ</th><th>التقدم</th><th>السور</th><th>الإجراءات</th></tr></thead>
-          <tbody>${list.map((s, i) => `
-            <tr>
-              <td><span class="badge badge-gray">${i+1}</span></td>
-              <td>
-                <div class="td-name">${s.name}</div>
-                ${s.phone ? `<div class="td-sub">📞 ${s.phone}</div>` : ''}
-              </td>
-              <td>${s.age ? `<span class="badge badge-gray">${s.age} سنة</span>` : '—'}</td>
-              <td>${s.teacher_name ? `<span class="badge badge-blue">${s.teacher_name}</span>` : '<span class="badge badge-gray">—</span>'}</td>
-              <td>
-                <div class="progress-wrap">
-                  <div class="progress-bar"><div class="progress-fill" style="width:${s.progress||0}%"></div></div>
-                  <span class="progress-pct">${s.progress||0}%</span>
-                </div>
-              </td>
-              <td><span class="badge badge-green">${s.memorized_count}</span></td>
-              <td>
-                <div style="display:flex;gap:5px">
-                  <button class="btn btn-outline btn-xs btn-view" data-id="${s.id}" title="ملف الطالب">👁️ ملف</button>
-                  <button class="btn btn-secondary btn-xs btn-edit" data-id="${s.id}">✏️</button>
-                  <button class="btn btn-danger btn-xs btn-del" data-id="${s.id}">🗑️</button>
-                </div>
-              </td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`
-      : `<div class="empty"><div class="empty-icon">👤</div><div class="empty-title">لا يوجد طلاب</div><div class="empty-sub">ابدأ بإضافة طالب جديد</div></div>`;
+  const render = list => {
+    $('_st').innerHTML = list.length ? `<div class="tw"><table>
+      <thead><tr><th>#</th><th>الطالب</th><th>العمر</th>${isAdmin?'<th>الأستاذ</th>':''}<th>التقدم</th><th>السور</th><th>إجراءات</th></tr></thead>
+      <tbody>${list.map((s,i) => `<tr>
+        <td><span class="badge bk">${toAr(i+1)}</span></td>
+        <td><div class="td-name">${s.name}</div>${s.phone?`<div class="td-sub">📞 ${s.phone}</div>`:''}</td>
+        <td>${s.age?`<span class="badge bk">${toAr(s.age)} سنة`:'—'}</td>
+        ${isAdmin?`<td>${s.teacher_name?`<span class="badge bb">${s.teacher_name}</span>`:'—'}</td>`:''}
+        <td><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${s.progress||0}%"></div></div><span class="prog-pct">${toAr(s.progress||0)}%</span></div></td>
+        <td><span class="badge bg">${toAr(s.memorized_count)}</span></td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn btn-sm" style="background:var(--gold-p);color:var(--gold);border:1px solid rgba(200,152,42,.2)" data-id="${s.id}" class2="_vw">👁️</button>
+          ${isAdmin?`<button class="btn btn-secondary btn-xs _es" data-id="${s.id}">✏️</button><button class="btn btn-danger btn-xs _ds" data-id="${s.id}">🗑️</button>`:''}
+        </div></td>
+      </tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty"><div class="empty-ico">👤</div><div class="empty-t">لا يوجد طلاب</div><div class="empty-s">${isAdmin?'أضف طالباً جديداً':'لا يوجد طلاب مسندون إليك'}</div></div>`;
 
-    pg.querySelectorAll('.btn-view').forEach(b => b.addEventListener('click', () => openStudentProfile(b.dataset.id)));
-    pg.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', () =>
-      studentModal(students.find(s => s.id == b.dataset.id), teachers, load)));
-    pg.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', () => delStudent(b.dataset.id)));
+    // bind view buttons
+    pg.querySelectorAll('[class2="_vw"], .btn[data-id]').forEach(b => {
+      if (!b.classList.contains('_es') && !b.classList.contains('_ds'))
+        b.addEventListener('click', () => openProfile(b.dataset.id));
+    });
+    pg.querySelectorAll('._es').forEach(b => b.addEventListener('click', () => studentModal(students.find(s=>s.id==b.dataset.id), teachers, load)));
+    pg.querySelectorAll('._ds').forEach(b => b.addEventListener('click', () => delStudent(b.dataset.id)));
   };
 
-  const applyFilters = () => {
-    const q = $('student-search').value.trim();
-    const tid = $('filter-teacher').value;
+  const filter = () => {
+    const q = $('_sq').value.trim();
+    const tid = isAdmin ? $('_ft')?.value : String(SESSION.id);
     render(students.filter(s =>
       (!q || s.name.includes(q) || (s.teacher_name||'').includes(q)) &&
-      (!tid || s.teacher_id == tid)
+      (!tid || String(s.teacher_id) === tid)
     ));
   };
 
   const load = async () => {
     [students, teachers] = await Promise.all([window.api.getStudents(), window.api.getTeachers()]);
-    const sel = $('filter-teacher');
-    sel.innerHTML = '<option value="">كل الأساتذة</option>' + teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
-    render(students);
-    updateNavCounts();
+    if (isAdmin && $('_ft')) {
+      $('_ft').innerHTML = '<option value="">كل الأساتذة</option>' + teachers.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+    }
+    filter();
+    updateBadges();
   };
   await load();
 
-  $('student-search').addEventListener('input', applyFilters);
-  $('filter-teacher').addEventListener('change', applyFilters);
-  $('btn-add-student').addEventListener('click', () => studentModal(null, teachers, load));
-  $('btn-print-students').addEventListener('click', () => printStudents(students));
+  $('_sq').addEventListener('input', filter);
+  $('_ft')?.addEventListener('change', filter);
+  $('_as')?.addEventListener('click', () => studentModal(null, teachers, load));
+  $('_pb').addEventListener('click', () => {
+    const visible = students.filter(s => !SESSION.id || s.teacher_id == SESSION.id);
+    doPrint(`
+      <div class="ph"><h1>قائمة الطلاب${!isAdmin?' — '+SESSION.name:''}</h1><p>المدرسة القرآنية — ${getMiladi()} | ${getHijri()}</p></div>
+      <table><thead><tr><th>#</th><th>الاسم</th><th>العمر</th><th>الأستاذ</th><th>السور</th><th>التقدم</th><th>الالتحاق</th></tr></thead>
+      <tbody>${visible.map((s,i)=>`<tr><td>${i+1}</td><td>${s.name}</td><td>${s.age||'—'}</td><td>${s.teacher_name||'—'}</td><td>${s.memorized_count}/114</td><td>${s.progress||0}%</td><td>${s.enrollment_date||'—'}</td></tr>`).join('')}</tbody></table>
+      <div class="pf">الإجمالي: ${visible.length} طالب — متوسط التقدم: ${visible.length?Math.round(visible.reduce((a,s)=>a+(s.progress||0),0)/visible.length):0}%</div>`);
+  });
 
-  const delStudent = async (id) => {
-    if (!confirm('هل تريد حذف هذا الطالب وجميع بياناته؟')) return;
-    await window.api.deleteStudent(Number(id));
-    showToast('تم حذف الطالب بنجاح');
-    load();
+  const delStudent = async id => {
+    if (!confirm('حذف هذا الطالب وكل بياناته؟')) return;
+    await window.api.deleteStudent(Number(id)); toast('تم الحذف'); load();
   };
 };
 
-function printStudents(students) {
-  printContent(`
-    <div class="print-header">
-      <h1>قائمة الطلاب</h1>
-      <p>المدرسة القرآنية — تاريخ الطباعة: ${new Date().toLocaleDateString('ar-DZ')}</p>
-    </div>
-    <table class="print-table">
-      <thead><tr><th>#</th><th>اسم الطالب</th><th>العمر</th><th>الأستاذ</th><th>السور المحفوظة</th><th>نسبة التقدم</th><th>تاريخ الالتحاق</th></tr></thead>
-      <tbody>${students.map((s,i) => `
-        <tr>
-          <td>${i+1}</td><td>${s.name}</td><td>${s.age||'—'}</td>
-          <td>${s.teacher_name||'—'}</td><td>${s.memorized_count} / 114</td>
-          <td>${s.progress||0}%</td><td>${s.enrollment_date||'—'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-    <div class="print-footer">
-      إجمالي الطلاب: ${students.length} &nbsp;|&nbsp;
-      متوسط التقدم: ${students.length ? Math.round(students.reduce((a,s)=>a+(s.progress||0),0)/students.length) : 0}%
-    </div>`);
-}
-
 function studentModal(data, teachers, onDone) {
-  const opts = teachers.map(t => `<option value="${t.id}" ${data?.teacher_id==t.id?'selected':''}>${t.name}</option>`).join('');
-  openModal(data ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد', `
-    <div class="form-group"><label>الاسم الكامل *</label><input class="input" id="s-name" value="${data?.name||''}" placeholder="أدخل الاسم الكامل للطالب"></div>
-    <div class="form-row">
-      <div class="form-group"><label>العمر</label><input class="input" type="number" id="s-age" value="${data?.age||''}" placeholder="العمر" min="4" max="99"></div>
-      <div class="form-group"><label>هاتف ولي الأمر</label><input class="input" id="s-phone" value="${data?.phone||''}" placeholder="0xx xxx xxxx"></div>
+  const opts = teachers.map(t=>`<option value="${t.id}" ${data?.teacher_id==t.id?'selected':''}>${t.name}</option>`).join('');
+  openModal(data ? 'تعديل الطالب' : 'إضافة طالب', `
+    <div class="fg"><label>الاسم الكامل *</label><input class="inp" id="_sn" value="${data?.name||''}" placeholder="أدخل الاسم"></div>
+    <div class="fr">
+      <div class="fg"><label>العمر</label><input class="inp" type="number" id="_sa" value="${data?.age||''}" min="4" max="99"></div>
+      <div class="fg"><label>هاتف ولي الأمر</label><input class="inp" id="_sp" value="${data?.phone||''}"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>الأستاذ المشرف</label>
-        <select class="input" id="s-teacher"><option value="">— بدون أستاذ —</option>${opts}</select>
-      </div>
-      <div class="form-group"><label>تاريخ الالتحاق</label>
-        <input class="input" type="date" id="s-date" value="${data?.enrollment_date||new Date().toISOString().split('T')[0]}">
-      </div>
+    <div class="fr">
+      <div class="fg"><label>الأستاذ</label><select class="inp" id="_st2"><option value="">— بدون أستاذ —</option>${opts}</select></div>
+      <div class="fg"><label>تاريخ الالتحاق</label><input class="inp" type="date" id="_sd" value="${data?.enrollment_date||new Date().toISOString().split('T')[0]}"></div>
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
-      <button class="btn btn-secondary" id="s-cancel">إلغاء</button>
-      <button class="btn btn-primary" id="s-save">💾 حفظ</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-secondary" id="_c">إلغاء</button>
+      <button class="btn btn-primary" id="_sv">💾 حفظ</button>
     </div>`);
-  $('s-cancel').addEventListener('click', closeModal);
-  $('s-save').addEventListener('click', async () => {
-    const name = $('s-name').value.trim();
-    if (!name) return showToast('الاسم مطلوب', 'error');
-    const d = { name, age: $('s-age').value||null, phone: $('s-phone').value, teacher_id: $('s-teacher').value||null, enrollment_date: $('s-date').value };
-    if (data) await window.api.updateStudent({ ...d, id: data.id });
-    else await window.api.addStudent(d);
-    showToast(data ? 'تم تحديث بيانات الطالب ✓' : 'تم إضافة الطالب بنجاح ✓');
-    closeModal(); onDone();
+  $('_c').addEventListener('click', closeModal);
+  $('_sv').addEventListener('click', async () => {
+    const name = $('_sn').value.trim();
+    if (!name) return toast('الاسم مطلوب', 'error');
+    const d = { name, age:$('_sa').value||null, phone:$('_sp').value, teacher_id:$('_st2').value||null, enrollment_date:$('_sd').value };
+    data ? await window.api.updateStudent({...d,id:data.id}) : await window.api.addStudent(d);
+    toast(data?'تم التحديث ✓':'تم الإضافة ✓'); closeModal(); onDone();
   });
 }
 
 // ── Student Profile ────────────────────────────────────────────────────
-async function openStudentProfile(id) {
-  const { student: s, memorized, attendance } = await window.api.getStudentById(Number(id));
+async function openProfile(id) {
+  const {student:s, memorized, attendance} = await window.api.getStudentById(Number(id));
   const surahs = await window.api.getSurahs();
-  const memorizedMap = {};
-  memorized.forEach(m => memorizedMap[m.surah_id] = m);
-  const presentDays = attendance.filter(a => a.status === 'حاضر').length;
-  const attPct = attendance.length ? Math.round(presentDays * 100 / attendance.length) : 0;
-  const gradeClass = g => ({ ممتاز:'badge-green', جيد:'badge-blue', مقبول:'badge-gold', ضعيف:'badge-red' }[g] || 'badge-gray');
+  const mMap = {};
+  memorized.forEach(m => mMap[m.surah_id] = m);
+  const present = attendance.filter(a=>a.status==='حاضر').length;
+  const attPct = attendance.length ? Math.round(present*100/attendance.length) : 0;
+  const pct = Math.round(memorized.length*100/114);
 
-  openModal(`ملف الطالب`, `
-    <div class="profile-header">
-      <div class="profile-avatar">👤</div>
-      <div>
-        <div class="profile-name">${s.name}</div>
-        <div class="profile-meta">
-          ${s.age ? `العمر: ${s.age} سنة` : ''}
-          ${s.teacher_name ? ` &nbsp;|&nbsp; الأستاذ: ${s.teacher_name}` : ''}
-          ${s.phone ? ` &nbsp;|&nbsp; 📞 ${s.phone}` : ''}
+  // achievements
+  const ach = [];
+  if (memorized.length >= 10)  ach.push('🌟 حفظ ١٠ سور');
+  if (memorized.length >= 30)  ach.push('🏅 حفظ ٣٠ سورة');
+  if (memorized.length >= 114) ach.push('🏆 ختم القرآن الكريم');
+  if (memorized.filter(m=>m.grade==='ممتاز').length >= 10) ach.push('💎 عشرة سور بامتياز');
+  if (attPct >= 90) ach.push('✅ مثالي في الحضور');
+
+  openModal(`ملف الطالب: ${s.name}`, `
+    <div class="prof-head">
+      <div class="prof-av">👤</div>
+      <div style="flex:1">
+        <div class="prof-name">${s.name}</div>
+        <div class="prof-meta">
+          ${s.age?`العمر: ${toAr(s.age)} سنة &nbsp;|&nbsp; `:''}
+          ${s.teacher_name?`الأستاذ: ${s.teacher_name} &nbsp;|&nbsp; `:''}
+          ${s.phone?`📞 ${s.phone}`:''}
         </div>
+        ${ach.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${ach.map(a=>`<span class="ach">${a}</span>`).join('')}</div>`:''}
       </div>
     </div>
 
-    <div class="profile-stats">
-      <div class="pstat"><div class="pstat-value">${memorized.length}</div><div class="pstat-label">سور محفوظة</div></div>
-      <div class="pstat"><div class="pstat-value">${Math.round(memorized.length*100/114)}%</div><div class="pstat-label">نسبة الإتمام</div></div>
-      <div class="pstat"><div class="pstat-value">${attPct}%</div><div class="pstat-label">نسبة الحضور</div></div>
+    <div class="prof-stats">
+      <div class="pst"><div class="pst-v">${toAr(memorized.length)}</div><div class="pst-l">سور محفوظة</div></div>
+      <div class="pst"><div class="pst-v">${toAr(pct)}%</div><div class="pst-l">نسبة الإتمام</div></div>
+      <div class="pst"><div class="pst-v">${toAr(attPct)}%</div><div class="pst-l">نسبة الحضور</div></div>
     </div>
 
-    <div class="section-title">🗺️ خريطة الحفظ</div>
-    <div class="quran-map" style="margin-bottom:22px">
+    <div class="sec-t">🗺️ خريطة الحفظ</div>
+    <div class="qmap">
       ${surahs.map(su => {
-        const m = memorizedMap[su.id];
-        return `<div class="surah-tile ${m ? 'memorized' : ''}" title="${su.name} — ${su.ayah_count} آية">
-          <div class="s-name">${su.name}</div>
-          <div class="s-grade">${m ? m.grade : su.ayah_count+'آ'}</div>
+        const m = mMap[su.id];
+        return `<div class="st ${m?'mem':''}" title="${su.name} — ${toAr(su.ayah_count)} آية">
+          <div class="st-n">${su.name}</div>
+          <div class="st-g">${m ? m.grade : toAr(su.ayah_count)+'آ'}</div>
         </div>`;
       }).join('')}
     </div>
 
     ${memorized.length ? `
-    <div class="section-title">📖 سجل الحفظ</div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>السورة</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th><th></th></tr></thead>
-        <tbody>${memorized.map(m => `
-          <tr>
-            <td><b>${m.surah_name}</b></td>
-            <td><span class="badge badge-gray">ج${m.juz}</span></td>
-            <td><span class="badge ${gradeClass(m.grade)}">${m.grade}</span></td>
-            <td>${m.date}</td>
-            <td><button class="btn btn-danger btn-xs del-mem" data-mid="${m.id}" data-sid="${s.id}">🗑️</button></td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
+    <div class="sec-t">📖 سجل الحفظ</div>
+    <div class="tw" style="margin-bottom:16px"><table>
+      <thead><tr><th>السورة</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th><th></th></tr></thead>
+      <tbody>${memorized.map(m=>`<tr>
+        <td><b>${m.surah_name}</b></td>
+        <td><span class="badge bk">ج${toAr(m.juz)}</span></td>
+        <td><span class="badge ${badgeCls(m.grade)}">${m.grade}</span></td>
+        <td>${m.date}</td>
+        <td><button class="btn btn-danger btn-xs _dm" data-mid="${m.id}" data-sid="${s.id}">🗑️</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : ''}
 
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
-      <button class="btn btn-print" id="btn-print-profile">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        طباعة الملف
-      </button>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-print btn-sm" id="_pp">🖨️ طباعة الملف</button>
     </div>`);
 
-  document.querySelectorAll('.del-mem').forEach(b => b.addEventListener('click', async () => {
+  document.querySelectorAll('._dm').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('حذف هذا السجل؟')) return;
     await window.api.deleteMemorization(Number(b.dataset.mid));
-    showToast('تم الحذف');
-    closeModal();
-    openStudentProfile(b.dataset.sid);
+    toast('تم الحذف'); closeModal(); openProfile(b.dataset.sid);
   }));
 
-  $('btn-print-profile')?.addEventListener('click', () => {
-    printContent(`
-      <div class="print-header">
-        <h1>ملف الطالب: ${s.name}</h1>
-        <p>المدرسة القرآنية — ${s.teacher_name ? 'الأستاذ: '+s.teacher_name+' — ' : ''}تاريخ الطباعة: ${new Date().toLocaleDateString('ar-DZ')}</p>
-      </div>
-      <p style="margin-bottom:16px;font-size:14px">
-        <b>السور المحفوظة:</b> ${memorized.length} من 114 &nbsp;|&nbsp;
-        <b>نسبة التقدم:</b> ${Math.round(memorized.length*100/114)}% &nbsp;|&nbsp;
-        <b>نسبة الحضور:</b> ${attPct}%
-      </p>
-      <table class="print-table">
-        <thead><tr><th>#</th><th>السورة</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th></tr></thead>
-        <tbody>${memorized.map((m,i) => `<tr><td>${i+1}</td><td>${m.surah_name}</td><td>${m.juz}</td><td>${m.grade}</td><td>${m.date}</td></tr>`).join('')}</tbody>
-      </table>`);
-  });
+  $('_pp')?.addEventListener('click', () => doPrint(`
+    <div class="ph"><h1>ملف الطالب: ${s.name}</h1>
+    <p>${s.teacher_name?'الأستاذ: '+s.teacher_name+' — ':''} ${getMiladi()} | ${getHijri()}</p></div>
+    <p style="margin:14px 0;font-size:13px">
+      <b>السور المحفوظة:</b> ${memorized.length}/114 &nbsp;|&nbsp;
+      <b>التقدم:</b> ${pct}% &nbsp;|&nbsp;
+      <b>الحضور:</b> ${attPct}%
+    </p>
+    <table><thead><tr><th>#</th><th>السورة</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th></tr></thead>
+    <tbody>${memorized.map((m,i)=>`<tr><td>${i+1}</td><td>${m.surah_name}</td><td>${m.juz}</td><td>${m.grade}</td><td>${m.date}</td></tr>`).join('')}</tbody></table>`));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -509,80 +485,71 @@ async function openStudentProfile(id) {
 pages.memorization = async () => {
   const pg = $('page-memorization');
   pg.innerHTML = `
-    <div class="page-header">
-      <div><div class="page-title">تسجيل الحفظ</div><div class="page-subtitle">إضافة جلسات الحفظ اليومية للطلاب</div></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px">
+    <div class="ph"><div><div class="ph-title">تسجيل الحفظ</div><div class="ph-sub">جلسات الحفظ اليومية</div></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:18px">
       <div class="card">
-        <div class="card-title"><div class="card-icon" style="background:var(--green-pale)">👤</div> اختيار الطالب</div>
-        <div class="form-group"><label>الطالب</label><select class="input" id="mem-student"><option value="">— اختر طالباً —</option></select></div>
-        <div class="form-group"><label>التاريخ</label><input class="input" type="date" id="mem-date" value="${new Date().toISOString().split('T')[0]}"></div>
-        <div id="mem-info" style="display:none;margin-top:14px;padding:14px;background:var(--green-pale);border-radius:var(--radius-sm);border:1px solid var(--green-pale2)">
-          <div style="font-weight:700;color:var(--green)" id="mem-info-name"></div>
-          <div style="font-size:12px;color:var(--text-dim);margin-top:4px" id="mem-info-stats"></div>
+        <div class="card-t">👤 اختيار الطالب</div>
+        <div class="fg"><label>الطالب</label><select class="inp" id="_ms"><option value="">— اختر طالباً —</option></select></div>
+        <div class="fg"><label>التاريخ</label><input class="inp" type="date" id="_md" value="${new Date().toISOString().split('T')[0]}"></div>
+        <div id="_mi" class="hidden" style="margin-top:12px;padding:12px;background:var(--green-p);border-radius:9px;border:1px solid var(--green-p2)">
+          <div style="font-weight:700;color:var(--green)" id="_mn"></div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:3px" id="_mst"></div>
+          <div class="prog-wrap" style="margin-top:8px"><div class="prog-bar"><div class="prog-fill" id="_mpb" style="width:0%"></div></div><span class="prog-pct" id="_mpp">٠%</span></div>
         </div>
       </div>
       <div class="card">
-        <div class="card-title"><div class="card-icon" style="background:var(--gold-pale)">📖</div> تسجيل الجلسة</div>
-        <div id="mem-form-area">
-          <div class="empty" style="padding:30px"><div class="empty-icon">👈</div><div class="empty-sub">اختر طالباً أولاً</div></div>
-        </div>
+        <div class="card-t">📖 تسجيل الجلسة</div>
+        <div id="_mf"><div class="empty" style="padding:30px"><div class="empty-ico">👈</div><div class="empty-s">اختر طالباً أولاً</div></div></div>
       </div>
     </div>`;
 
   const [students, surahs] = await Promise.all([window.api.getStudents(), window.api.getSurahs()]);
-  const sel = $('mem-student');
-  students.forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name} (${s.memorized_count} سورة)</option>`);
 
-  sel.addEventListener('change', async () => {
+  // فلتر حسب الأستاذ
+  const myStudents = SESSION.id ? students.filter(s=>s.teacher_id==SESSION.id) : students;
+  const sel = $('_ms');
+  myStudents.forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name} (${toAr(s.memorized_count)} سورة)</option>`);
+
+  sel.addEventListener('change', () => {
     const id = Number(sel.value);
-    if (!id) { $('mem-info').style.display='none'; $('mem-form-area').innerHTML = `<div class="empty" style="padding:30px"><div class="empty-icon">👈</div><div class="empty-sub">اختر طالباً أولاً</div></div>`; return; }
-    const st = students.find(s => s.id == id);
-    $('mem-info').style.display = 'block';
-    $('mem-info-name').textContent = st.name;
-    $('mem-info-stats').innerHTML = `السور المحفوظة: ${st.memorized_count} / 114 — التقدم: ${st.progress||0}%`;
+    if (!id) { $('_mi').classList.add('hidden'); $('_mf').innerHTML=`<div class="empty" style="padding:30px"><div class="empty-ico">👈</div><div class="empty-s">اختر طالباً أولاً</div></div>`; return; }
+    const st = myStudents.find(s=>s.id==id);
+    $('_mi').classList.remove('hidden');
+    $('_mn').textContent = st.name;
+    $('_mst').textContent = `${toAr(st.memorized_count)} سورة محفوظة من ${toAr(114)}`;
+    $('_mpb').style.width = (st.progress||0)+'%';
+    $('_mpp').textContent = toAr(st.progress||0)+'%';
 
-    $('mem-form-area').innerHTML = `
-      <div class="form-group"><label>السورة</label>
-        <select class="input" id="mem-surah">
-          <option value="">— اختر السورة —</option>
-          ${surahs.map(s => `<option value="${s.id}">سورة ${s.name} — ${s.ayah_count} آية (ج${s.juz})</option>`).join('')}
+    $('_mf').innerHTML = `
+      <div class="fg"><label>السورة</label>
+        <select class="inp" id="_msu"><option value="">— اختر السورة —</option>
+          ${surahs.map(s=>`<option value="${s.id}">سورة ${s.name} — ${toAr(s.ayah_count)} آية (ج${toAr(s.juz)})</option>`).join('')}
         </select>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>التقييم</label>
-          <select class="input" id="mem-grade">
+      <div class="fr">
+        <div class="fg"><label>التقييم</label>
+          <select class="inp" id="_mgr">
             <option value="ممتاز">⭐⭐⭐ ممتاز</option>
             <option value="جيد">⭐⭐ جيد</option>
             <option value="مقبول">⭐ مقبول</option>
-            <option value="ضعيف">⚠️ ضعيف — يحتاج مراجعة</option>
+            <option value="ضعيف">⚠️ ضعيف</option>
           </select>
         </div>
-        <div class="form-group"><label>ملاحظات</label><input class="input" id="mem-notes" placeholder="ملاحظات اختيارية..."></div>
+        <div class="fg"><label>ملاحظات</label><input class="inp" id="_mnt" placeholder="اختياري..."></div>
       </div>
-      <button class="btn btn-primary" id="btn-save-mem" style="width:100%;justify-content:center;padding:13px">
-        💾 حفظ الجلسة
-      </button>`;
+      <button class="btn btn-primary" id="_msv" style="width:100%;justify-content:center;padding:12px">💾 حفظ الجلسة</button>`;
 
-    $('btn-save-mem').addEventListener('click', async () => {
-      const surah_id = Number($('mem-surah').value);
-      if (!surah_id) return showToast('يرجى اختيار السورة', 'error');
-      const btn = $('btn-save-mem');
-      btn.textContent = '⏳ جاري الحفظ...';
-      btn.disabled = true;
-      await window.api.addMemorization({
-        student_id: id, surah_id,
-        date: $('mem-date').value,
-        grade: $('mem-grade').value,
-        notes: $('mem-notes').value
-      });
-      showToast('✓ تم تسجيل جلسة الحفظ بنجاح');
-      btn.textContent = '💾 حفظ الجلسة';
-      btn.disabled = false;
-      $('mem-notes').value = '';
-      const updated = await window.api.getStudents();
-      const stu = updated.find(s => s.id == id);
-      if (stu) $('mem-info-stats').innerHTML = `السور المحفوظة: ${stu.memorized_count} / 114 — التقدم: ${stu.progress||0}%`;
+    $('_msv').addEventListener('click', async () => {
+      const surah_id = Number($('_msu').value);
+      if (!surah_id) return toast('اختر السورة', 'error');
+      const btn = $('_msv'); btn.textContent = '⏳...'; btn.disabled = true;
+      await window.api.addMemorization({ student_id:id, surah_id, date:$('_md').value, grade:$('_mgr').value, notes:$('_mnt').value });
+      toast('✓ تم تسجيل جلسة الحفظ');
+      btn.textContent = '💾 حفظ الجلسة'; btn.disabled = false;
+      $('_mnt').value = '';
+      const upd = await window.api.getStudents();
+      const stu = upd.find(s=>s.id==id);
+      if (stu) { $('_mst').textContent=`${toAr(stu.memorized_count)} سورة محفوظة من ١١٤`; $('_mpb').style.width=(stu.progress||0)+'%'; $('_mpp').textContent=toAr(stu.progress||0)+'%'; }
     });
   });
 };
@@ -594,117 +561,98 @@ pages.attendance = async () => {
   const pg = $('page-attendance');
   const today = new Date().toISOString().split('T')[0];
   pg.innerHTML = `
-    <div class="page-header">
-      <div><div class="page-title">الحضور والغياب</div><div class="page-subtitle">تسجيل حضور الطلاب اليومي</div></div>
-      <div style="display:flex;gap:10px;align-items:center">
-        <input class="input" type="date" id="att-date" value="${today}" style="width:180px">
-        <button class="btn btn-primary" id="btn-save-att">💾 حفظ الحضور</button>
-        <button class="btn btn-print" id="btn-print-att">🖨️ طباعة</button>
+    <div class="ph">
+      <div><div class="ph-title">الحضور والغياب</div><div class="ph-sub">التسجيل اليومي للحضور — ${getHijri()}</div></div>
+      <div class="ph-actions">
+        <input class="inp" type="date" id="_ad" value="${today}" style="width:170px">
+        <button class="btn btn-primary" id="_sav">💾 حفظ</button>
+        <button class="btn btn-print" id="_pr">🖨️</button>
       </div>
     </div>
-
-    <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
-        <div style="font-size:13px;color:var(--text-dim)">الإجمالي: <b id="att-total" style="color:var(--text)">0</b></div>
-        <div style="font-size:13px"><span style="color:var(--green)">حاضر: <b id="att-present">0</b></span></div>
-        <div style="font-size:13px"><span style="color:var(--red)">غائب: <b id="att-absent">0</b></span></div>
-        <div style="font-size:13px"><span style="color:var(--gold)">بعذر: <b id="att-excuse">0</b></span></div>
-        <div style="margin-right:auto;display:flex;gap:6px">
-          <button class="btn btn-secondary btn-sm" id="btn-all-present">✅ تحديد الكل حاضر</button>
-          <button class="btn btn-secondary btn-sm" id="btn-all-absent">❌ تحديد الكل غائب</button>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+        <span style="color:var(--text-dim);font-size:13px">الإجمالي: <b id="_at" style="color:var(--text)">٠</b></span>
+        <span style="color:var(--green);font-size:13px">حاضر: <b id="_ap">٠</b></span>
+        <span style="color:var(--red);font-size:13px">غائب: <b id="_aa">٠</b></span>
+        <span style="color:var(--gold);font-size:13px">بعذر: <b id="_ae">٠</b></span>
+        <div style="margin-right:auto;display:flex;gap:7px">
+          <button class="btn btn-secondary btn-sm" id="_allP">✅ الكل حاضر</button>
+          <button class="btn btn-secondary btn-sm" id="_allA">❌ الكل غائب</button>
         </div>
       </div>
     </div>
+    <div class="card"><div id="_al"></div></div>`;
 
-    <div class="card"><div id="att-list"></div></div>`;
+  const state = {};
+  let rows = [];
 
-  const attState = {};
-  const updateCounts = () => {
-    const vals = Object.values(attState);
-    $('att-total').textContent = vals.length;
-    $('att-present').textContent = vals.filter(v => v === 'حاضر').length;
-    $('att-absent').textContent  = vals.filter(v => v === 'غائب').length;
-    $('att-excuse').textContent  = vals.filter(v => v === 'بعذر').length;
+  const counts = () => {
+    const v = Object.values(state);
+    $('_at').textContent = toAr(v.length);
+    $('_ap').textContent = toAr(v.filter(x=>x==='حاضر').length);
+    $('_aa').textContent = toAr(v.filter(x=>x==='غائب').length);
+    $('_ae').textContent = toAr(v.filter(x=>x==='بعذر').length);
   };
 
-  let currentRows = [];
   const loadAtt = async () => {
-    const date = $('att-date').value;
-    currentRows = await window.api.getAttendanceByDate(date);
-    const list = $('att-list');
-    list.innerHTML = currentRows.length
-      ? currentRows.map(r => `
-          <div class="att-row" id="arow-${r.id}">
-            <div class="att-name">${r.name}</div>
-            <div class="att-btns">
-              <button class="att-btn ${r.status==='حاضر'?'present':''}" data-id="${r.id}" data-val="حاضر">✓ حاضر</button>
-              <button class="att-btn ${r.status==='غائب'?'absent':''}"  data-id="${r.id}" data-val="غائب">✕ غائب</button>
-              <button class="att-btn ${r.status==='بعذر'?'excuse':''}"  data-id="${r.id}" data-val="بعذر">📋 بعذر</button>
-            </div>
-          </div>`).join('')
-      : `<div class="empty"><div class="empty-icon">👤</div><div class="empty-title">لا يوجد طلاب</div><div class="empty-sub">أضف طلاباً أولاً</div></div>`;
+    const date = $('_ad').value;
+    // فلتر حسب الأستاذ
+    let allRows = await window.api.getAttendanceByDate(date);
+    rows = SESSION.id ? allRows.filter(r => r.teacher_id == SESSION.id) : allRows;
+    Object.keys(state).forEach(k => delete state[k]);
 
-    currentRows.forEach(r => { if (r.status) attState[r.id] = r.status; });
-    updateCounts();
+    $('_al').innerHTML = rows.length ? rows.map(r => `
+      <div class="att-row" id="ar${r.id}">
+        <div style="font-weight:600">${r.name}</div>
+        <div class="att-btns">
+          <button class="att-btn ${r.status==='حاضر'?'P':''}" data-id="${r.id}" data-v="حاضر">✓ حاضر</button>
+          <button class="att-btn ${r.status==='غائب'?'A':''}" data-id="${r.id}" data-v="غائب">✕ غائب</button>
+          <button class="att-btn ${r.status==='بعذر'?'E':''}" data-id="${r.id}" data-v="بعذر">📋 بعذر</button>
+        </div>
+      </div>`).join('')
+    : `<div class="empty"><div class="empty-ico">👤</div><div class="empty-t">لا يوجد طلاب</div></div>`;
 
-    list.querySelectorAll('.att-btn').forEach(b => b.addEventListener('click', () => {
-      const id = b.dataset.id, val = b.dataset.val;
-      attState[id] = val;
-      const row = $(`arow-${id}`);
-      row.querySelectorAll('.att-btn').forEach(x => x.className = 'att-btn');
-      b.classList.add(val === 'حاضر' ? 'present' : val === 'غائب' ? 'absent' : 'excuse');
-      updateCounts();
+    rows.forEach(r => { if (r.status) state[r.id] = r.status; });
+    counts();
+
+    $('_al').querySelectorAll('.att-btn').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.id, v = b.dataset.v;
+      state[id] = v;
+      document.querySelectorAll(`#ar${id} .att-btn`).forEach(x => x.className = 'att-btn');
+      b.classList.add(v==='حاضر'?'P':v==='غائب'?'A':'E');
+      counts();
     }));
   };
 
   await loadAtt();
-  $('att-date').addEventListener('change', () => { Object.keys(attState).forEach(k => delete attState[k]); loadAtt(); });
+  $('_ad').addEventListener('change', loadAtt);
 
-  $('btn-all-present').addEventListener('click', () => {
-    currentRows.forEach(r => {
-      attState[r.id] = 'حاضر';
-      const row = $(`arow-${r.id}`);
-      row?.querySelectorAll('.att-btn').forEach(x => x.className = 'att-btn');
-      row?.querySelector('[data-val="حاضر"]')?.classList.add('present');
+  const markAll = v => {
+    rows.forEach(r => {
+      state[r.id] = v;
+      document.querySelectorAll(`#ar${r.id} .att-btn`).forEach(x => x.className='att-btn');
+      document.querySelector(`#ar${r.id} [data-v="${v}"]`)?.classList.add(v==='حاضر'?'P':v==='غائب'?'A':'E');
     });
-    updateCounts();
+    counts();
+  };
+  $('_allP').addEventListener('click', () => markAll('حاضر'));
+  $('_allA').addEventListener('click', () => markAll('غائب'));
+
+  $('_sav').addEventListener('click', async () => {
+    const records = Object.entries(state).map(([id,status]) => ({id:Number(id),status}));
+    await window.api.saveAttendance({ date:$('_ad').value, records });
+    toast('✓ تم حفظ الحضور');
   });
 
-  $('btn-all-absent').addEventListener('click', () => {
-    currentRows.forEach(r => {
-      attState[r.id] = 'غائب';
-      const row = $(`arow-${r.id}`);
-      row?.querySelectorAll('.att-btn').forEach(x => x.className = 'att-btn');
-      row?.querySelector('[data-val="غائب"]')?.classList.add('absent');
-    });
-    updateCounts();
-  });
-
-  $('btn-save-att').addEventListener('click', async () => {
-    const date = $('att-date').value;
-    const records = Object.entries(attState).map(([id, status]) => ({ id: Number(id), status }));
-    await window.api.saveAttendance({ date, records });
-    showToast('✓ تم حفظ الحضور بنجاح');
-  });
-
-  $('btn-print-att').addEventListener('click', () => {
-    const date = $('att-date').value;
-    printContent(`
-      <div class="print-header">
-        <h1>كشف الحضور</h1>
-        <p>المدرسة القرآنية — التاريخ: ${date}</p>
-      </div>
-      <table class="print-table">
-        <thead><tr><th>#</th><th>اسم الطالب</th><th>الحالة</th></tr></thead>
-        <tbody>${currentRows.map((r,i) => `
-          <tr><td>${i+1}</td><td>${r.name}</td><td>${attState[r.id]||'—'}</td></tr>`).join('')}
-        </tbody>
-      </table>
-      <div class="print-footer">
-        حاضر: ${Object.values(attState).filter(v=>v==='حاضر').length} |
-        غائب: ${Object.values(attState).filter(v=>v==='غائب').length} |
-        بعذر: ${Object.values(attState).filter(v=>v==='بعذر').length}
-      </div>`);
+  $('_pr').addEventListener('click', () => {
+    const date = $('_ad').value;
+    const hijri = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'numeric',month:'long',year:'numeric'}).format(new Date(date));
+    doPrint(`
+      <div class="ph"><h1>كشف الحضور${!SESSION.id?'':' — '+SESSION.name}</h1>
+      <p>التاريخ: ${date} | الهجري: ${hijri}</p></div>
+      <table><thead><tr><th>#</th><th>اسم الطالب</th><th>الحضور</th></tr></thead>
+      <tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>${state[r.id]||'—'}</td></tr>`).join('')}</tbody></table>
+      <div class="pf">حاضر: ${Object.values(state).filter(v=>v==='حاضر').length} | غائب: ${Object.values(state).filter(v=>v==='غائب').length} | بعذر: ${Object.values(state).filter(v=>v==='بعذر').length}</div>`);
   });
 };
 
@@ -713,100 +661,53 @@ pages.attendance = async () => {
 // ═══════════════════════════════════════════════════════════════════════
 pages.reports = async () => {
   const pg = $('page-reports');
-  pg.innerHTML = `
-    <div class="page-header">
-      <div><div class="page-title">التقارير</div><div class="page-subtitle">تقرير شامل لأداء جميع الطلاب</div></div>
-      <button class="btn btn-print" id="btn-print-report">🖨️ طباعة التقرير</button>
-    </div>
-    <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
-      <div style="font-size:32px;margin-bottom:8px">⏳</div>
-      جاري تحميل التقرير...
-    </div>`;
+  pg.innerHTML = `<div class="ph"><div><div class="ph-title">التقارير</div><div class="ph-sub">تقرير شامل للأداء</div></div><button class="btn btn-print" id="_rp">🖨️ طباعة</button></div>
+    <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">⏳ جاري التحميل...</div>`;
 
-  const data = await window.api.getFullReport();
-  const gradeClass = pct => pct >= 75 ? 'badge-green' : pct >= 40 ? 'badge-gold' : 'badge-red';
+  const data = (await window.api.getFullReport()).filter(r => !SESSION.id || r.teacher_id == SESSION.id);
+
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
 
   pg.innerHTML = `
-    <div class="page-header">
-      <div><div class="page-title">التقارير</div><div class="page-subtitle">تقرير شامل لأداء جميع الطلاب</div></div>
-      <button class="btn btn-print" id="btn-print-report">🖨️ طباعة التقرير</button>
+    <div class="ph">
+      <div><div class="ph-title">التقارير</div><div class="ph-sub">${SESSION.id?'مجموعة: '+SESSION.name:'تقرير شامل لجميع الطلاب'}</div></div>
+      <button class="btn btn-print" id="_rp">🖨️ طباعة</button>
     </div>
-
-    <div class="stats-grid stagger" style="margin-bottom:20px">
-      <div class="stat-card green">
-        <div class="stat-bg-icon">👥</div>
-        <div class="stat-label">إجمالي الطلاب</div>
-        <div class="stat-value">${data.length}</div>
-      </div>
-      <div class="stat-card gold">
-        <div class="stat-bg-icon">📊</div>
-        <div class="stat-label">متوسط التقدم</div>
-        <div class="stat-value">${data.length ? Math.round(data.reduce((a,r)=>a+(r.pct||0),0)/data.length) : 0}%</div>
-      </div>
-      <div class="stat-card blue">
-        <div class="stat-bg-icon">🏆</div>
-        <div class="stat-label">أعلى نسبة حفظ</div>
-        <div class="stat-value">${data.length ? data[0].pct||0 : 0}%</div>
-      </div>
-      <div class="stat-card red">
-        <div class="stat-bg-icon">⚠️</div>
-        <div class="stat-label">يحتاجون متابعة</div>
-        <div class="stat-value">${data.filter(r=>(r.pct||0)<40).length}</div>
-      </div>
+    <div class="stats-grid" style="margin-bottom:18px">
+      <div class="stat-card sc-green"><div class="stat-bg">👥</div><div class="stat-lbl">الطلاب</div><div class="stat-val">${toAr(data.length)}</div></div>
+      <div class="stat-card sc-gold"><div class="stat-bg">📊</div><div class="stat-lbl">متوسط الحفظ</div><div class="stat-val">${toAr(avg(data.map(r=>r.pct||0)))}%</div></div>
+      <div class="stat-card sc-blue"><div class="stat-bg">🏆</div><div class="stat-lbl">أعلى نسبة</div><div class="stat-val">${toAr(data.length?data[0].pct||0:0)}%</div></div>
+      <div class="stat-card sc-red"><div class="stat-bg">⚠️</div><div class="stat-lbl">يحتاجون متابعة</div><div class="stat-val">${toAr(data.filter(r=>(r.pct||0)<40).length)}</div></div>
     </div>
-
     <div class="card">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>#</th><th>الطالب</th><th>الأستاذ</th><th>السور المحفوظة</th><th>نسبة الحفظ</th><th>أيام الحضور</th><th>نسبة الحضور</th><th>الحالة</th></tr>
-          </thead>
-          <tbody>${data.map((r, i) => {
-            const attPct = r.total_days ? Math.round(r.present_days*100/r.total_days) : 0;
-            const statusLabel = (r.pct||0) >= 75 ? ['ممتاز','badge-green'] : (r.pct||0) >= 40 ? ['جيد','badge-gold'] : ['يحتاج متابعة','badge-red'];
-            return `<tr>
-              <td><span class="badge badge-gray">${i+1}</span></td>
-              <td><div class="td-name">${r.name}</div></td>
-              <td>${r.teacher_name ? `<span class="badge badge-blue">${r.teacher_name}</span>` : '—'}</td>
-              <td><span class="badge badge-green">${r.memorized} / 114</span></td>
-              <td>
-                <div class="progress-wrap">
-                  <div class="progress-bar"><div class="progress-fill" style="width:${r.pct||0}%"></div></div>
-                  <span class="progress-pct">${r.pct||0}%</span>
-                </div>
-              </td>
-              <td>${r.present_days} / ${r.total_days}</td>
-              <td><span class="badge ${gradeClass(attPct)}">${attPct}%</span></td>
-              <td><span class="badge ${statusLabel[1]}">${statusLabel[0]}</span></td>
-            </tr>`;
-          }).join('')}
-          </tbody>
-        </table>
-      </div>
+      <div class="tw"><table>
+        <thead><tr><th>#</th><th>الطالب</th><th>الأستاذ</th><th>السور</th><th>الحفظ</th><th>الحضور</th><th>الحالة</th></tr></thead>
+        <tbody>${data.map((r,i)=>{
+          const attPct = r.total_days?Math.round(r.present_days*100/r.total_days):0;
+          const [lbl,cls] = (r.pct||0)>=75?['ممتاز','bg']:(r.pct||0)>=40?['جيد','bo']:['يحتاج متابعة','br'];
+          return `<tr>
+            <td><span class="badge bk">${toAr(i+1)}</span></td>
+            <td><div class="td-name">${r.name}</div></td>
+            <td>${r.teacher_name?`<span class="badge bb">${r.teacher_name}</span>`:'—'}</td>
+            <td><span class="badge bg">${toAr(r.memorized)}/١١٤</span></td>
+            <td><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${r.pct||0}%"></div></div><span class="prog-pct">${toAr(r.pct||0)}%</span></div></td>
+            <td><span class="badge ${pctBadge(attPct)}">${toAr(attPct)}%</span></td>
+            <td><span class="badge ${cls}">${lbl}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
     </div>`;
 
-  $('btn-print-report').addEventListener('click', () => {
-    printContent(`
-      <div class="print-header">
-        <h1>تقرير شامل — المدرسة القرآنية</h1>
-        <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-DZ')}</p>
-      </div>
-      <table class="print-table">
-        <thead><tr><th>#</th><th>الطالب</th><th>الأستاذ</th><th>السور</th><th>الحفظ%</th><th>الحضور%</th><th>الحالة</th></tr></thead>
-        <tbody>${data.map((r,i) => {
-          const attPct = r.total_days ? Math.round(r.present_days*100/r.total_days) : 0;
-          const status = (r.pct||0) >= 75 ? 'ممتاز' : (r.pct||0) >= 40 ? 'جيد' : 'يحتاج متابعة';
-          return `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.teacher_name||'—'}</td><td>${r.memorized}/114</td><td>${r.pct||0}%</td><td>${attPct}%</td><td>${status}</td></tr>`;
-        }).join('')}
-        </tbody>
-      </table>
-      <div class="print-footer">
-        الإجمالي: ${data.length} طالب |
-        متوسط الحفظ: ${data.length ? Math.round(data.reduce((a,r)=>a+(r.pct||0),0)/data.length) : 0}%
-      </div>`);
-  });
+  $('_rp').addEventListener('click', () => doPrint(`
+    <div class="ph"><h1>التقرير الشامل${SESSION.id?' — '+SESSION.name:''}</h1><p>${getMiladi()} | ${getHijri()}</p></div>
+    <table><thead><tr><th>#</th><th>الطالب</th><th>الأستاذ</th><th>السور</th><th>الحفظ%</th><th>الحضور%</th><th>الحالة</th></tr></thead>
+    <tbody>${data.map((r,i)=>{
+      const attPct=r.total_days?Math.round(r.present_days*100/r.total_days):0;
+      const s=(r.pct||0)>=75?'ممتاز':(r.pct||0)>=40?'جيد':'يحتاج متابعة';
+      return `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.teacher_name||'—'}</td><td>${r.memorized}/114</td><td>${r.pct||0}%</td><td>${attPct}%</td><td>${s}</td></tr>`;
+    }).join('')}</tbody></table>
+    <div class="pf">الإجمالي: ${data.length} طالب | متوسط الحفظ: ${avg(data.map(r=>r.pct||0))}%</div>`));
 };
 
-// ── Boot ───────────────────────────────────────────────────────────────
-pages.dashboard();
-updateNavCounts();
+// ── BOOT ───────────────────────────────────────────────────────────────
+initLogin();

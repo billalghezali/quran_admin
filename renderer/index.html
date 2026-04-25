@@ -2,110 +2,105 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>نظام إدارة المدرسة القرآنية</title>
 <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Amiri:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<aside class="sidebar">
-  <div class="sidebar-brand">
-    <div class="brand-icon">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-        <path d="M16 2C8.268 2 2 8.268 2 16s6.268 14 14 14 14-6.268 14-14S23.732 2 16 2z" fill="url(#g1)"/>
-        <path d="M16 8c-1.5 3-4 5-4 8s2.5 5 4 8c1.5-3 4-5 4-8s-2.5-5-4-8z" fill="white" opacity="0.9"/>
-        <path d="M8 12c3 1.5 5 4 8 4s5-2.5 8-4c-3-1.5-5-4-8-4s-5 2.5-8 4z" fill="white" opacity="0.6"/>
-        <defs><linearGradient id="g1" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#1a7a44"/><stop offset="100%" stop-color="#0d5c2e"/>
-        </linearGradient></defs>
-      </svg>
-    </div>
-    <div class="brand-text">
-      <div class="brand-title">نور القرآن</div>
-      <div class="brand-sub">نظام إدارة المدرسة</div>
-    </div>
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen" class="login-screen">
+  <div class="login-bg">
+    <div class="login-orb orb1"></div>
+    <div class="login-orb orb2"></div>
+    <div class="login-orb orb3"></div>
   </div>
-
-  <div class="sidebar-user">
-    <div class="user-avatar">🕌</div>
-    <div class="user-info">
-      <div class="user-name">لوحة الإدارة</div>
-      <div class="user-status"><span class="status-dot"></span>نشط</div>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-icon">☽</div>
+      <h1 class="login-title">نور القرآن</h1>
+      <p class="login-sub">نظام إدارة المدرسة القرآنية</p>
     </div>
+    <div class="login-ayah">﴿ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا ﴾</div>
+    <div class="login-form">
+      <label class="login-label">من أنت؟</label>
+      <select class="login-select" id="login-who">
+        <option value="">— اختر —</option>
+        <option value="admin">🔑 المدير (عرض كامل)</option>
+      </select>
+      <button class="login-btn" id="login-btn">دخول ←</button>
+    </div>
+    <div class="login-footer">إصدار 2.0 • المدرسة القرآنية</div>
   </div>
+</div>
 
-  <nav class="nav">
-    <div class="nav-section-label">القائمة الرئيسية</div>
-    <button class="nav-btn active" data-page="dashboard">
-      <span class="nav-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      </span>
-      <span>لوحة التحكم</span>
-    </button>
-    <button class="nav-btn" data-page="students">
-      <span class="nav-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      </span>
-      <span>الطلاب</span>
-      <span class="nav-count" id="nav-count-students">0</span>
-    </button>
-    <button class="nav-btn" data-page="teachers">
-      <span class="nav-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-      </span>
-      <span>الأساتذة</span>
-      <span class="nav-count" id="nav-count-teachers">0</span>
-    </button>
-    <div class="nav-section-label">العمليات</div>
-    <button class="nav-btn" data-page="memorization">
-      <span class="nav-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-      </span>
-      <span>تسجيل الحفظ</span>
-    </button>
-    <button class="nav-btn" data-page="attendance">
-      <span class="nav-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      </span>
-      <span>الحضور والغياب</span>
-    </button>
-    <button class="nav-btn" data-page="reports">
-      <span class="nav-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      </span>
-      <span>التقارير</span>
-    </button>
-  </nav>
+<!-- ══ APP ══ -->
+<div id="app" class="app hidden">
 
-  <div class="sidebar-footer">
-    <div class="ayah">﴿ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا ﴾</div>
-  </div>
-</aside>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">☽</div>
+      <div>
+        <div class="brand-title">نور القرآن</div>
+        <div class="brand-sub">نظام الإدارة</div>
+      </div>
+    </div>
 
-<!-- MAIN -->
-<div class="layout-right">
-  <!-- TOP BAR -->
-  <header class="topbar">
-    <div class="topbar-title" id="topbar-title">لوحة التحكم</div>
-    <div class="topbar-actions">
-      <div class="topbar-date" id="topbar-date"></div>
-      <button class="topbar-btn" id="btn-refresh" title="تحديث">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    <div class="sidebar-session" id="session-info">
+      <div class="session-avatar" id="session-avatar">👤</div>
+      <div>
+        <div class="session-name" id="session-name">المدير</div>
+        <div class="session-role" id="session-role">عرض كامل</div>
+      </div>
+      <button class="session-logout" id="btn-logout" title="خروج">↩</button>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">الرئيسية</div>
+      <button class="nav-btn active" data-page="dashboard">
+        <span class="nav-ico">⊞</span> لوحة التحكم
       </button>
-    </div>
-  </header>
+      <button class="nav-btn" data-page="students" id="nav-students">
+        <span class="nav-ico">👥</span> الطلاب
+        <span class="nav-badge" id="nb-students">0</span>
+      </button>
+      <button class="nav-btn admin-only" data-page="teachers">
+        <span class="nav-ico">🎓</span> الأساتذة
+        <span class="nav-badge" id="nb-teachers">0</span>
+      </button>
+      <div class="nav-label">العمليات</div>
+      <button class="nav-btn" data-page="memorization">
+        <span class="nav-ico">📖</span> تسجيل الحفظ
+      </button>
+      <button class="nav-btn" data-page="attendance">
+        <span class="nav-ico">✅</span> الحضور
+      </button>
+      <button class="nav-btn" data-page="reports">
+        <span class="nav-ico">📊</span> التقارير
+      </button>
+    </nav>
 
-  <!-- PAGES -->
-  <main class="main">
-    <div id="page-dashboard"    class="page active"></div>
-    <div id="page-students"     class="page"></div>
-    <div id="page-teachers"     class="page"></div>
-    <div id="page-memorization" class="page"></div>
-    <div id="page-attendance"   class="page"></div>
-    <div id="page-reports"      class="page"></div>
-  </main>
+    <div class="sidebar-foot">﴿ خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ ﴾</div>
+  </aside>
+
+  <div class="layout-main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="topbar-title">لوحة التحكم</div>
+        <div class="topbar-dates" id="topbar-dates"></div>
+      </div>
+      <button class="topbar-refresh" id="btn-refresh" title="تحديث">↻</button>
+    </header>
+
+    <main class="main">
+      <div id="page-dashboard"    class="page active"></div>
+      <div id="page-students"     class="page"></div>
+      <div id="page-teachers"     class="page"></div>
+      <div id="page-memorization" class="page"></div>
+      <div id="page-attendance"   class="page"></div>
+      <div id="page-reports"      class="page"></div>
+    </main>
+  </div>
 </div>
 
 <!-- MODAL -->
@@ -113,18 +108,13 @@
   <div class="modal" id="modal-box">
     <div class="modal-header">
       <h3 id="modal-title"></h3>
-      <button id="modal-close" class="modal-close">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <button id="modal-close" class="modal-close">✕</button>
     </div>
     <div id="modal-body" class="modal-body"></div>
   </div>
 </div>
 
-<!-- TOAST -->
 <div id="toast" class="toast hidden"></div>
-
-<!-- PRINT AREA -->
 <div id="print-area" class="print-area"></div>
 
 <script src="app.js"></script>
