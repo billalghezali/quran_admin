@@ -13,23 +13,28 @@
     "directories": {
       "output": "dist"
     },
-    "win": {
-      "target": "nsis",
-      "icon": "./ChatGPT Image 24 avr. 2026, 23_49_54.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["ar"],
-      "language": "1025"
-    },
     "files": [
       "main.js",
       "preload.js",
       "renderer/**",
+      "package.json",
       "node_modules/**",
-      "package.json"
-    ]
+      "!node_modules/*/{CHANGELOG.md,README.md,readme.md}",
+      "!node_modules/*/{test,__tests__,tests,example,examples}",
+      "!node_modules/**/*.map",
+      "!node_modules/**/*.md"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "compression": "maximum"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "sql.js": "^1.12.0"

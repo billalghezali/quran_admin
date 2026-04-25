@@ -55,8 +55,104 @@ function closeModal() {
 $('modal-close').addEventListener('click', closeModal);
 $('modal-overlay').addEventListener('click', e => { if (e.target === $('modal-overlay')) closeModal(); });
 
-// ── Print ──────────────────────────────────────────────────────────────
-function doPrint(html) { $('print-area').innerHTML = html; window.print(); }
+// ── Print Preview ──────────────────────────────────────────────────────
+function doPrint(html, title = '') {
+  // استخراج العنوان من h1 إذا لم يُعطَ
+  if (!title) {
+    const m = html.match(/<h1[^>]*>(.*?)<\/h1>/);
+    title = m ? m[1] : 'معاينة قبل الطباعة';
+  }
+  // إنشاء نافذة معاينة
+  const overlay = document.createElement('div');
+  overlay.id = '_preview_overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    background:rgba(15,25,40,.75);
+    backdrop-filter:blur(6px);
+    display:flex;flex-direction:column;align-items:center;
+    padding:20px;overflow-y:auto;
+    animation:pgIn .25s ease;
+  `;
+
+  const box = document.createElement('div');
+  box.style.cssText = `
+    width:100%;max-width:860px;
+    background:#fff;border-radius:12px;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+    overflow:hidden;
+  `;
+
+  // شريط الأدوات
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = `
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;
+    background:#1a7a44;color:#fff;
+    font-family:'Tajawal',sans-serif;
+    direction:rtl;
+  `;
+  toolbar.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">📄</span>
+      <span style="font-size:15px;font-weight:700">${title}</span>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button id="_prev_print" style="
+        padding:8px 20px;border-radius:7px;border:none;cursor:pointer;
+        background:#fff;color:#1a7a44;font-weight:700;font-size:13px;
+        font-family:'Tajawal',sans-serif;
+        display:flex;align-items:center;gap:6px;
+        box-shadow:0 2px 8px rgba(0,0,0,.15);
+        transition:all .2s;
+      ">🖨️ طباعة</button>
+      <button id="_prev_close" style="
+        padding:8px 16px;border-radius:7px;border:1px solid rgba(255,255,255,.3);
+        cursor:pointer;background:transparent;color:#fff;font-weight:600;
+        font-size:13px;font-family:'Tajawal',sans-serif;transition:all .2s;
+      ">✕ إغلاق</button>
+    </div>
+  `;
+
+  // محتوى المعاينة
+  const preview = document.createElement('div');
+  preview.style.cssText = `
+    padding:40px 50px;
+    font-family:'Tajawal',sans-serif;
+    direction:rtl;background:#fff;
+    min-height:400px;
+  `;
+  preview.innerHTML = `
+    <style>
+      #_preview_overlay table{width:100%;border-collapse:collapse;margin-top:12px}
+      #_preview_overlay thead th{background:#1a7a44;color:#fff;padding:10px 14px;text-align:right;font-size:13px;font-weight:700}
+      #_preview_overlay tbody td{padding:9px 14px;border-bottom:1px solid #e5e9ef;font-size:13px}
+      #_preview_overlay tbody tr:nth-child(even) td{background:#f4f9f6}
+      #_preview_overlay .ph h1{font-size:22px;color:#1a7a44;margin-bottom:4px}
+      #_preview_overlay .ph p{font-size:12px;color:#666}
+      #_preview_overlay .ph{border-bottom:2px solid #1a7a44;padding-bottom:14px;margin-bottom:18px}
+      #_preview_overlay .pf{margin-top:16px;text-align:center;font-size:12px;color:#999;border-top:1px solid #e5e9ef;padding-top:12px}
+    </style>
+    ${html}
+  `;
+
+  box.appendChild(toolbar);
+  box.appendChild(preview);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // أحداث
+  document.getElementById('_prev_print').addEventListener('click', () => {
+    $('print-area').innerHTML = html;
+    window.print();
+  });
+  document.getElementById('_prev_close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // hover effect على زر الطباعة
+  const pb = document.getElementById('_prev_print');
+  pb.addEventListener('mouseenter', () => pb.style.transform = 'translateY(-1px)');
+  pb.addEventListener('mouseleave', () => pb.style.transform = '');
+}
 
 // ── Session (Teacher Login) ────────────────────────────────────────────
 let SESSION = { id: null, name: '', role: 'admin' }; // role: admin | teacher
@@ -247,9 +343,9 @@ pages.teachers = async () => {
   $('ts').addEventListener('input', e => render(teachers.filter(t => t.name.includes(e.target.value))));
   $('ba').addEventListener('click', () => teacherModal(null, load));
   $('_pb').addEventListener('click', () => doPrint(`
-    <div class="ph"><h1>قائمة الأساتذة</h1><p>المدرسة القرآنية — ${getMiladi()} — ${getHijri()}</p></div>
+    <div class="ph"><h1>قائمة الأساتذة</h1><p>المدرسة القرآنية — ${getMiladi()} | ${getHijri()}</p></div>
     <table><thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>التخصص</th><th>عدد الطلاب</th></tr></thead>
-    <tbody>${teachers.map((t,i)=>`<tr><td>${i+1}</td><td>${t.name}</td><td>${t.phone||'—'}</td><td>${t.specialization||'—'}</td><td>${t.student_count}</td></tr>`).join('')}</tbody></table>
+    <tbody>${teachers.map((t,i)=>`<tr><td>${i+1}</td><td>${t.name}</td><td>${t.phone||'—'}</td><td>${t.specialization||'—'}</td><td>${t.student_count}</td></tr>`, 'قائمة الأساتذة').join('')}</tbody></table>
     <div class="pf">الإجمالي: ${teachers.length} أستاذ</div>`));
 
   const delTeacher = async id => {
@@ -359,7 +455,7 @@ pages.students = async () => {
     doPrint(`
       <div class="ph"><h1>قائمة الطلاب${!isAdmin?' — '+SESSION.name:''}</h1><p>المدرسة القرآنية — ${getMiladi()} | ${getHijri()}</p></div>
       <table><thead><tr><th>#</th><th>الاسم</th><th>العمر</th><th>الأستاذ</th><th>السور</th><th>التقدم</th><th>الالتحاق</th></tr></thead>
-      <tbody>${visible.map((s,i)=>`<tr><td>${i+1}</td><td>${s.name}</td><td>${s.age||'—'}</td><td>${s.teacher_name||'—'}</td><td>${s.memorized_count}/114</td><td>${s.progress||0}%</td><td>${s.enrollment_date||'—'}</td></tr>`).join('')}</tbody></table>
+      <tbody>${visible.map((s,i)=>`<tr><td>${i+1}</td><td>${s.name}</td><td>${s.age||'—'}</td><td>${s.teacher_name||'—'}</td><td>${s.memorized_count}/114</td><td>${s.progress||0}%</td><td>${s.enrollment_date||'—'}</td></tr>`, 'قائمة الطلاب').join('')}</tbody></table>
       <div class="pf">الإجمالي: ${visible.length} طالب — متوسط التقدم: ${visible.length?Math.round(visible.reduce((a,s)=>a+(s.progress||0),0)/visible.length):0}%</div>`);
   });
 
@@ -398,7 +494,6 @@ function studentModal(data, teachers, onDone) {
 // ── Student Profile ────────────────────────────────────────────────────
 async function openProfile(id) {
   const {student:s, memorized, attendance} = await window.api.getStudentById(Number(id));
-  const surahs = await window.api.getSurahs();
   const mMap = {};
   memorized.forEach(m => mMap[m.surah_id] = m);
   const present = attendance.filter(a=>a.status==='حاضر').length;
@@ -433,16 +528,6 @@ async function openProfile(id) {
       <div class="pst"><div class="pst-v">${toAr(attPct)}%</div><div class="pst-l">نسبة الحضور</div></div>
     </div>
 
-    <div class="sec-t">🗺️ خريطة الحفظ</div>
-    <div class="qmap">
-      ${surahs.map(su => {
-        const m = mMap[su.id];
-        return `<div class="st ${m?'mem':''}" title="${su.name} — ${toAr(su.ayah_count)} آية">
-          <div class="st-n">${su.name}</div>
-          <div class="st-g">${m ? m.grade : toAr(su.ayah_count)+'آ'}</div>
-        </div>`;
-      }).join('')}
-    </div>
 
     ${memorized.length ? `
     <div class="sec-t">📖 سجل الحفظ</div>
@@ -476,7 +561,7 @@ async function openProfile(id) {
       <b>الحضور:</b> ${attPct}%
     </p>
     <table><thead><tr><th>#</th><th>السورة</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th></tr></thead>
-    <tbody>${memorized.map((m,i)=>`<tr><td>${i+1}</td><td>${m.surah_name}</td><td>${m.juz}</td><td>${m.grade}</td><td>${m.date}</td></tr>`).join('')}</tbody></table>`));
+    <tbody>${memorized.map((m,i)=>`<tr><td>${i+1}</td><td>${m.surah_name}</td><td>${m.juz}</td><td>${m.grade}</td><td>${m.date}</td></tr>`, 'ملف الطالب').join('')}</tbody></table>`));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -651,7 +736,7 @@ pages.attendance = async () => {
       <div class="ph"><h1>كشف الحضور${!SESSION.id?'':' — '+SESSION.name}</h1>
       <p>التاريخ: ${date} | الهجري: ${hijri}</p></div>
       <table><thead><tr><th>#</th><th>اسم الطالب</th><th>الحضور</th></tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>${state[r.id]||'—'}</td></tr>`).join('')}</tbody></table>
+      <tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>${state[r.id]||'—'}</td></tr>`, 'كشف الحضور').join('')}</tbody></table>
       <div class="pf">حاضر: ${Object.values(state).filter(v=>v==='حاضر').length} | غائب: ${Object.values(state).filter(v=>v==='غائب').length} | بعذر: ${Object.values(state).filter(v=>v==='بعذر').length}</div>`);
   });
 };
@@ -706,7 +791,7 @@ pages.reports = async () => {
       const s=(r.pct||0)>=75?'ممتاز':(r.pct||0)>=40?'جيد':'يحتاج متابعة';
       return `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.teacher_name||'—'}</td><td>${r.memorized}/114</td><td>${r.pct||0}%</td><td>${attPct}%</td><td>${s}</td></tr>`;
     }).join('')}</tbody></table>
-    <div class="pf">الإجمالي: ${data.length} طالب | متوسط الحفظ: ${avg(data.map(r=>r.pct||0))}%</div>`));
+    <div class="pf">الإجمالي: ${data.length} طالب | متوسط الحفظ: ${avg(data.map(r=>r.pct||0))}%</div>`, 'التقرير الشامل'));
 };
 
 // ── BOOT ───────────────────────────────────────────────────────────────

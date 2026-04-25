@@ -158,9 +158,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false
     },
+    icon: path.join(__dirname, 'icon.ico'),
     backgroundColor: '#0B1E13',
     show: false,
-    title: 'نظام إدارة المدرسة القرآنية'
+    title: 'إدارة المدرسة القرآنية'
   });
   mainWindow.loadFile('renderer/index.html');
   mainWindow.once('ready-to-show', () => mainWindow.show());
@@ -174,14 +175,17 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // IPC Handlers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-ipcMain.handle('dashboard:stats', () => ({
-  totalStudents : get('SELECT COUNT(*) as c FROM students').c,
-  totalTeachers : get('SELECT COUNT(*) as c FROM teachers').c,
-  todayPresent  : (get(`SELECT COUNT(*) as c FROM attendance WHERE date=? AND status='حاضر'`, [today()]) || {c:0}).c,
-  totalSessions : get('SELECT COUNT(*) as c FROM memorization').c,
-  topStudents   : query(`SELECT s.name, COUNT(m.id) as cnt FROM students s LEFT JOIN memorization m ON s.id=m.student_id GROUP BY s.id ORDER BY cnt DESC LIMIT 5`),
-  recentActivity: query(`SELECT s.name as student, su.name as surah, m.grade, m.date FROM memorization m JOIN students s ON m.student_id=s.id JOIN surahs su ON m.surah_id=su.id ORDER BY m.id DESC LIMIT 8`)
-}));
+ipcMain.handle('dashboard:stats', (_, teacherId) => {
+  const tf = teacherId ? `AND s.teacher_id=${Number(teacherId)}` : '';
+  return {
+    totalStudents : (get(`SELECT COUNT(*) as c FROM students s WHERE 1=1 ${tf}`) || {c:0}).c,
+    totalTeachers : (get('SELECT COUNT(*) as c FROM teachers') || {c:0}).c,
+    todayPresent  : (get(`SELECT COUNT(*) as c FROM attendance a JOIN students s ON a.student_id=s.id WHERE a.date=? AND a.status='حاضر' ${tf}`, [today()]) || {c:0}).c,
+    totalSessions : (get(`SELECT COUNT(*) as c FROM memorization m JOIN students s ON m.student_id=s.id WHERE 1=1 ${tf}`) || {c:0}).c,
+    topStudents   : query(`SELECT s.name, COUNT(m.id) as cnt FROM students s LEFT JOIN memorization m ON s.id=m.student_id WHERE 1=1 ${tf} GROUP BY s.id ORDER BY cnt DESC LIMIT 5`),
+    recentActivity: query(`SELECT s.name as student, su.name as surah, m.grade, m.date FROM memorization m JOIN students s ON m.student_id=s.id JOIN surahs su ON m.surah_id=su.id WHERE 1=1 ${tf} ORDER BY m.id DESC LIMIT 8`)
+  };
+});
 
 ipcMain.handle('teachers:getAll', () =>
   query(`SELECT t.*, COUNT(s.id) as student_count FROM teachers t LEFT JOIN students s ON t.id=s.teacher_id GROUP BY t.id ORDER BY t.name`)
@@ -239,7 +243,7 @@ ipcMain.handle('memorization:delete', (_, id) => {
 });
 
 ipcMain.handle('attendance:getByDate', (_, date) =>
-  query(`SELECT s.id, s.name, a.status FROM students s LEFT JOIN attendance a ON s.id=a.student_id AND a.date=? ORDER BY s.name`, [date])
+  query(`SELECT s.id, s.name, s.teacher_id, a.status FROM students s LEFT JOIN attendance a ON s.id=a.student_id AND a.date=? ORDER BY s.name`, [date])
 );
 ipcMain.handle('attendance:saveAll', (_, { date, records }) => {
   records.forEach(r => {
@@ -251,5 +255,5 @@ ipcMain.handle('attendance:saveAll', (_, { date, records }) => {
 });
 
 ipcMain.handle('reports:allStudents', () =>
-  query(`SELECT s.name, t.name as teacher_name, COUNT(DISTINCT m.id) as memorized, ROUND(COUNT(DISTINCT m.id)*100.0/114,1) as pct, COUNT(DISTINCT CASE WHEN a.status='حاضر' THEN a.id END) as present_days, COUNT(DISTINCT a.id) as total_days FROM students s LEFT JOIN teachers t ON s.teacher_id=t.id LEFT JOIN memorization m ON s.id=m.student_id LEFT JOIN attendance a ON s.id=a.student_id GROUP BY s.id ORDER BY pct DESC`)
+  query(`SELECT s.id, s.teacher_id, s.name, t.name as teacher_name, COUNT(DISTINCT m.id) as memorized, ROUND(COUNT(DISTINCT m.id)*100.0/114,1) as pct, COUNT(DISTINCT CASE WHEN a.status='حاضر' THEN a.id END) as present_days, COUNT(DISTINCT a.id) as total_days FROM students s LEFT JOIN teachers t ON s.teacher_id=t.id LEFT JOIN memorization m ON s.id=m.student_id LEFT JOIN attendance a ON s.id=a.student_id GROUP BY s.id ORDER BY pct DESC`)
 );
