@@ -763,11 +763,11 @@ pages.memorization = async () => {
           <div class="fr" style="margin-bottom:10px">
             <div class="fg" style="margin:0">
               <label>من الآية</label>
-              <input class="inp" type="number" id="_maf" value="1" min="1" style="text-align:center;font-size:18px;font-weight:800;color:var(--green);font-family:'Tajawal',sans-serif" dir="ltr">
+              <input class="inp" type="text" id="_maf" value="١" inputmode="numeric" style="text-align:center;font-size:22px;font-weight:800;color:var(--green);font-family:'Tajawal',sans-serif;letter-spacing:2px">
             </div>
             <div class="fg" style="margin:0">
               <label>إلى الآية</label>
-              <input class="inp" type="number" id="_mat" value="1" min="1" style="text-align:center;font-size:18px;font-weight:800;color:var(--green);font-family:'Tajawal',sans-serif" dir="ltr">
+              <input class="inp" type="text" id="_mat" value="١" inputmode="numeric" style="text-align:center;font-size:22px;font-weight:800;color:var(--green);font-family:'Tajawal',sans-serif;letter-spacing:2px">
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -794,31 +794,54 @@ pages.memorization = async () => {
       const total = Number(opt?.dataset.count || 0);
       if (!total) { $('_ayah_wrap').style.display='none'; return; }
       $('_ayah_wrap').style.display='block';
-      $('_maf').max=total; $('_maf').value=1;
-      $('_mat').max=total; $('_mat').value=total;
+      $('_maf').value = toAr(1);
+      $('_mat').value = toAr(total);
       refreshInfo(total);
     });
 
+    // تحويل الأرقام العربية إلى غربية للحساب
+    const fromAr = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    const getVal = id => Number(fromAr($('_maf') && id==='_maf' ? $('_maf').value : $('_mat')?.value) || 0);
+
     function refreshInfo(total) {
-      const from=Number($('_maf')?.value||1), to=Number($('_mat')?.value||1);
-      const cnt=Math.max(0,to-from+1), full=from===1&&to===total;
-      if($('_ayah_info')) $('_ayah_info').innerHTML=
+      const from = Number(fromAr($('_maf')?.value||'1'))||1;
+      const to   = Number(fromAr($('_mat')?.value||'1'))||1;
+      const cnt  = Math.max(0, to-from+1);
+      const full = from===1 && to===total;
+      if ($('_ayah_info')) $('_ayah_info').innerHTML =
         `<b style="color:var(--green)">${toAr(cnt)} آية</b> ${full
-          ?'<span class="badge bg" style="margin-right:4px">✓ كاملة</span>'
-          :`<span style="color:var(--text-muted)">من ${toAr(total)}</span>`}`;
+          ? '<span class="badge bg" style="margin-right:4px">✓ كاملة</span>'
+          : `<span style="color:var(--text-muted)">من ${toAr(total)}</span>`}`;
+    }
+
+    // تحويل المدخل لأرقام عربية أثناء الكتابة
+    function arabicInput(el, max) {
+      el.addEventListener('input', () => {
+        const raw = fromAr(el.value).replace(/\D/g,'');
+        let num = Math.max(1, Math.min(Number(raw)||1, max));
+        el.value = toAr(num);
+      });
     }
 
     setTimeout(()=>{
-      const gT=()=>Number($('_msu').selectedOptions[0]?.dataset.count||0);
-      $('_maf')?.addEventListener('input',()=>refreshInfo(gT()));
-      $('_mat')?.addEventListener('input',()=>refreshInfo(gT()));
-      $('_full_surah')?.addEventListener('click',()=>{const t=gT();$('_maf').value=1;$('_mat').value=t;refreshInfo(t);});
-    },50);
+      const gT = () => Number($('_msu').selectedOptions[0]?.dataset.count||0);
+      arabicInput($('_maf'), gT());
+      arabicInput($('_mat'), gT());
+      $('_maf')?.addEventListener('input', () => refreshInfo(gT()));
+      $('_mat')?.addEventListener('input', () => refreshInfo(gT()));
+      $('_full_surah')?.addEventListener('click', () => {
+        const t = gT();
+        $('_maf').value = toAr(1);
+        $('_mat').value = toAr(t);
+        refreshInfo(t);
+      });
+    }, 50);
 
     $('_msv').addEventListener('click', async () => {
       const surah_id=Number($('_msu').value);
       if(!surah_id) return toast('اختر السورة أولاً','error');
-      const ayah_from=Number($('_maf')?.value||1), ayah_to=Number($('_mat')?.value||0);
+      const ayah_from = Number(fromAr($('_maf')?.value||'1'))||1;
+      const ayah_to   = Number(fromAr($('_mat')?.value||'0'))||0;
       if(ayah_to>0&&ayah_to<ayah_from) return toast('الآية النهائية يجب أن تكون أكبر من البداية','error');
       const btn=$('_msv'); btn.textContent='⏳ جاري الحفظ...'; btn.disabled=true;
       await window.api.addMemorization({student_id:id,surah_id,ayah_from,ayah_to,date:$('_md').value,grade:$('_mgr').value,notes:$('_mnt').value});

@@ -166,6 +166,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false
     },
+    icon: path.join(__dirname, 'icon.ico')
+    ,
     backgroundColor: '#0B1E13',
     show: false,
     title: 'نظام إدارة المدرسة القرآنية'
