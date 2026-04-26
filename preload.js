@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Dashboard
-  getDashboardStats: () => ipcRenderer.invoke('dashboard:stats'),
+  getDashboardStats: (tid) => ipcRenderer.invoke('dashboard:stats', tid),
 
   // Teachers
   getTeachers:  ()  => ipcRenderer.invoke('teachers:getAll'),
@@ -30,4 +30,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Reports
   getFullReport: () => ipcRenderer.invoke('reports:allStudents'),
+
+  // Admin Password
+  checkPassword: (pwd) => ipcRenderer.invoke('admin:checkPassword', pwd),
+  setPassword:   (pwd) => ipcRenderer.invoke('admin:setPassword', pwd),
+  hasPassword:   ()    => ipcRenderer.invoke('admin:hasPassword'),
 });

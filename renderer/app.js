@@ -167,18 +167,103 @@ async function initLogin() {
     sel.appendChild(o);
   });
 
-  $('login-btn').addEventListener('click', () => {
+  $('login-btn').addEventListener('click', async () => {
     const val = sel.value;
     if (!val) return;
+
     if (val === 'admin') {
-      SESSION = { id: null, name: 'المدير', role: 'admin' };
+      const { has } = await window.api.hasPassword();
+      if (!has) {
+        // أول مرة — اطلب إنشاء كلمة سر
+        showPasswordSetup();
+      } else {
+        showPasswordPrompt(teachers);
+      }
     } else {
       const tid = Number(val.replace('teacher_', ''));
       const t = teachers.find(x => x.id === tid);
       SESSION = { id: tid, name: t.name, role: 'teacher' };
+      startApp();
     }
-    startApp();
   });
+}
+
+// ── شاشة إنشاء كلمة السر (أول مرة) ──────────────────────────────────
+function showPasswordSetup() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:36px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center;font-family:Tajawal,sans-serif;direction:rtl">
+      <div style="font-size:48px;margin-bottom:12px">🔐</div>
+      <h2 style="font-family:Amiri,serif;color:#1a7a44;margin-bottom:6px">إنشاء كلمة السر</h2>
+      <p style="font-size:13px;color:#5a6a7e;margin-bottom:24px">أول مرة تدخل كمدير — حدد كلمة سر لحماية النظام</p>
+      <input id="_pw1" type="password" placeholder="كلمة السر الجديدة" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:9px;font-size:15px;font-family:Tajawal,sans-serif;margin-bottom:10px;outline:none;text-align:center">
+      <input id="_pw2" type="password" placeholder="تأكيد كلمة السر" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:9px;font-size:15px;font-family:Tajawal,sans-serif;margin-bottom:6px;outline:none;text-align:center">
+      <div id="_pw_err" style="color:#e05050;font-size:12px;margin-bottom:12px;min-height:18px"></div>
+      <button id="_pw_save" style="width:100%;padding:13px;border-radius:9px;border:none;background:#1a7a44;color:#fff;font-size:15px;font-weight:700;font-family:Tajawal,sans-serif;cursor:pointer">✓ حفظ كلمة السر</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#_pw1').focus();
+  overlay.querySelector('#_pw_save').addEventListener('click', async () => {
+    const p1 = overlay.querySelector('#_pw1').value.trim();
+    const p2 = overlay.querySelector('#_pw2').value.trim();
+    const err = overlay.querySelector('#_pw_err');
+    if (!p1) { err.textContent = 'كلمة السر لا يمكن أن تكون فارغة'; return; }
+    if (p1.length < 4) { err.textContent = 'كلمة السر يجب أن تكون ٤ أحرف على الأقل'; return; }
+    if (p1 !== p2) { err.textContent = 'كلمتا السر غير متطابقتين'; return; }
+    await window.api.setPassword(p1);
+    overlay.remove();
+    SESSION = { id: null, name: 'المدير', role: 'admin' };
+    startApp();
+    toast('✓ تم إنشاء كلمة السر بنجاح');
+  });
+}
+
+// ── شاشة إدخال كلمة السر ─────────────────────────────────────────────
+function showPasswordPrompt(teachers) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center;font-family:Tajawal,sans-serif;direction:rtl">
+      <div style="font-size:48px;margin-bottom:12px">🔑</div>
+      <h2 style="font-family:Amiri,serif;color:#1a7a44;margin-bottom:6px">دخول المدير</h2>
+      <p style="font-size:13px;color:#5a6a7e;margin-bottom:24px">أدخل كلمة السر للمتابعة</p>
+      <input id="_pwi" type="password" placeholder="كلمة السر" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:9px;font-size:18px;font-family:Tajawal,sans-serif;margin-bottom:6px;outline:none;text-align:center;letter-spacing:4px">
+      <div id="_pwi_err" style="color:#e05050;font-size:12px;margin-bottom:14px;min-height:18px"></div>
+      <button id="_pwi_ok" style="width:100%;padding:13px;border-radius:9px;border:none;background:#1a7a44;color:#fff;font-size:15px;font-weight:700;font-family:Tajawal,sans-serif;cursor:pointer;margin-bottom:10px">→ دخول</button>
+      <button id="_pwi_cancel" style="width:100%;padding:10px;border-radius:9px;border:1.5px solid #e2e8f0;background:#fff;color:#5a6a7e;font-size:13px;font-family:Tajawal,sans-serif;cursor:pointer">إلغاء</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector('#_pwi');
+  input.focus();
+
+  // الدخول بالضغط على Enter
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') overlay.querySelector('#_pwi_ok').click(); });
+
+  overlay.querySelector('#_pwi_ok').addEventListener('click', async () => {
+    const pwd = input.value;
+    const err = overlay.querySelector('#_pwi_err');
+    if (!pwd) { err.textContent = 'أدخل كلمة السر'; return; }
+    const btn = overlay.querySelector('#_pwi_ok');
+    btn.textContent = '⏳...'; btn.disabled = true;
+    const res = await window.api.checkPassword(pwd);
+    if (res.status === 'ok') {
+      overlay.remove();
+      SESSION = { id: null, name: 'المدير', role: 'admin' };
+      startApp();
+    } else {
+      err.textContent = '❌ كلمة السر غير صحيحة';
+      input.value = '';
+      input.focus();
+      input.style.borderColor = '#e05050';
+      setTimeout(() => input.style.borderColor = '#e2e8f0', 1500);
+      btn.textContent = '→ دخول'; btn.disabled = false;
+    }
+  });
+
+  overlay.querySelector('#_pwi_cancel').addEventListener('click', () => overlay.remove());
 }
 
 function startApp() {
@@ -194,8 +279,58 @@ function startApp() {
     el.style.display = SESSION.role === 'admin' ? '' : 'none';
   });
 
+  // زر تغيير كلمة السر (مدير فقط)
+  let cpBtn = $('_cp_btn');
+  if (!cpBtn && SESSION.role === 'admin') {
+    cpBtn = document.createElement('button');
+    cpBtn.id = '_cp_btn';
+    cpBtn.title = 'تغيير كلمة السر';
+    cpBtn.style.cssText = 'background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);width:28px;height:28px;border-radius:6px;font-size:13px;cursor:pointer;transition:all .2s;flex-shrink:0';
+    cpBtn.textContent = '⚙';
+    cpBtn.addEventListener('mouseenter', () => cpBtn.style.background='rgba(255,255,255,.25)');
+    cpBtn.addEventListener('mouseleave', () => cpBtn.style.background='rgba(255,255,255,.12)');
+    cpBtn.addEventListener('click', showChangePassword);
+    const si = $('sidebar-session');
+    if (si) si.appendChild(cpBtn);
+  }
+
   pages.dashboard();
   updateBadges();
+}
+
+function showChangePassword() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:36px;width:370px;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center;font-family:Tajawal,sans-serif;direction:rtl">
+      <div style="font-size:40px;margin-bottom:10px">🔐</div>
+      <h2 style="font-family:Amiri,serif;color:#1a7a44;margin-bottom:20px">تغيير كلمة السر</h2>
+      <input id="_cp_old" type="password" placeholder="كلمة السر الحالية" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:Tajawal,sans-serif;margin-bottom:10px;outline:none;text-align:center">
+      <input id="_cp_new" type="password" placeholder="كلمة السر الجديدة" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:Tajawal,sans-serif;margin-bottom:10px;outline:none;text-align:center">
+      <input id="_cp_conf" type="password" placeholder="تأكيد كلمة السر الجديدة" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:Tajawal,sans-serif;margin-bottom:6px;outline:none;text-align:center">
+      <div id="_cp_err" style="color:#e05050;font-size:12px;margin-bottom:14px;min-height:18px"></div>
+      <div style="display:flex;gap:10px">
+        <button id="_cp_cancel" style="flex:1;padding:11px;border-radius:9px;border:1.5px solid #e2e8f0;background:#fff;color:#5a6a7e;font-size:13px;font-family:Tajawal,sans-serif;cursor:pointer">إلغاء</button>
+        <button id="_cp_save" style="flex:2;padding:11px;border-radius:9px;border:none;background:#1a7a44;color:#fff;font-size:14px;font-weight:700;font-family:Tajawal,sans-serif;cursor:pointer">✓ حفظ</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#_cp_old').focus();
+  overlay.querySelector('#_cp_cancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#_cp_save').addEventListener('click', async () => {
+    const old = overlay.querySelector('#_cp_old').value;
+    const nw  = overlay.querySelector('#_cp_new').value.trim();
+    const cf  = overlay.querySelector('#_cp_conf').value.trim();
+    const err = overlay.querySelector('#_cp_err');
+    if (!old) { err.textContent = 'أدخل كلمة السر الحالية'; return; }
+    if (!nw || nw.length < 4) { err.textContent = 'كلمة السر الجديدة يجب أن تكون ٤ أحرف على الأقل'; return; }
+    if (nw !== cf) { err.textContent = 'كلمتا السر غير متطابقتين'; return; }
+    const res = await window.api.checkPassword(old);
+    if (res.status !== 'ok') { err.textContent = '❌ كلمة السر الحالية غير صحيحة'; return; }
+    await window.api.setPassword(nw);
+    overlay.remove();
+    toast('✓ تم تغيير كلمة السر بنجاح');
+  });
 }
 
 $('btn-logout').addEventListener('click', () => {
@@ -493,12 +628,14 @@ function studentModal(data, teachers, onDone) {
 
 // ── Student Profile ────────────────────────────────────────────────────
 async function openProfile(id) {
-  const {student:s, memorized, attendance} = await window.api.getStudentById(Number(id));
+  const data = await window.api.getStudentById(Number(id));
+  const {student:s, memorized, attendance} = data;
   const mMap = {};
   memorized.forEach(m => mMap[m.surah_id] = m);
   const present = attendance.filter(a=>a.status==='حاضر').length;
   const attPct = attendance.length ? Math.round(present*100/attendance.length) : 0;
-  const pct = Math.round(memorized.length*100/114);
+  const totalAyahs = data.totalAyahs || 0;
+  const pct = Math.round(totalAyahs*100/6236);
 
   // achievements
   const ach = [];
@@ -523,7 +660,7 @@ async function openProfile(id) {
     </div>
 
     <div class="prof-stats">
-      <div class="pst"><div class="pst-v">${toAr(memorized.length)}</div><div class="pst-l">سور محفوظة</div></div>
+      <div class="pst"><div class="pst-v">${toAr(totalAyahs)}</div><div class="pst-l">آية محفوظة من ٦٢٣٦</div></div>
       <div class="pst"><div class="pst-v">${toAr(pct)}%</div><div class="pst-l">نسبة الإتمام</div></div>
       <div class="pst"><div class="pst-v">${toAr(attPct)}%</div><div class="pst-l">نسبة الحضور</div></div>
     </div>
@@ -532,14 +669,23 @@ async function openProfile(id) {
     ${memorized.length ? `
     <div class="sec-t">📖 سجل الحفظ</div>
     <div class="tw" style="margin-bottom:16px"><table>
-      <thead><tr><th>السورة</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th><th></th></tr></thead>
-      <tbody>${memorized.map(m=>`<tr>
-        <td><b>${m.surah_name}</b></td>
-        <td><span class="badge bk">ج${toAr(m.juz)}</span></td>
-        <td><span class="badge ${badgeCls(m.grade)}">${m.grade}</span></td>
-        <td>${m.date}</td>
-        <td><button class="btn btn-danger btn-xs _dm" data-mid="${m.id}" data-sid="${s.id}">🗑️</button></td>
-      </tr>`).join('')}</tbody>
+      <thead><tr><th>السورة</th><th>الآيات</th><th>الجزء</th><th>التقييم</th><th>التاريخ</th><th></th></tr></thead>
+      <tbody>${memorized.map(m=>{
+        const from=m.ayah_from||1, to=m.ayah_to||m.ayah_count;
+        const isFull=from===1&&to===m.ayah_count;
+        const cnt=to-from+1;
+        return `<tr>
+          <td><b>${m.surah_name}</b></td>
+          <td>${isFull
+            ?'<span class="badge bg">كاملة ✓</span>'
+            :`<span class="badge bb">الآية ${toAr(from)} — ${toAr(to)}</span> <span style="font-size:11px;color:var(--text-muted)">(${toAr(cnt)} آية)</span>`}
+          </td>
+          <td><span class="badge bk">ج${toAr(m.juz)}</span></td>
+          <td><span class="badge ${badgeCls(m.grade)}">${m.grade}</span></td>
+          <td>${m.date}</td>
+          <td><button class="btn btn-danger btn-xs _dm" data-mid="${m.id}" data-sid="${s.id}">🗑️</button></td>
+        </tr>`;
+      }).join('')}</tbody>
     </table></div>` : ''}
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -608,8 +754,27 @@ pages.memorization = async () => {
     $('_mf').innerHTML = `
       <div class="fg"><label>السورة</label>
         <select class="inp" id="_msu"><option value="">— اختر السورة —</option>
-          ${surahs.map(s=>`<option value="${s.id}">سورة ${s.name} — ${toAr(s.ayah_count)} آية (ج${toAr(s.juz)})</option>`).join('')}
+          ${surahs.map(s=>`<option value="${s.id}" data-count="${s.ayah_count}">سورة ${s.name} — ${toAr(s.ayah_count)} آية (ج${toAr(s.juz)})</option>`).join('')}
         </select>
+      </div>
+      <div id="_ayah_wrap" style="display:none;margin-bottom:14px">
+        <div style="background:var(--green-p);border:1px solid var(--green-p2);border-radius:10px;padding:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px">📖 نطاق الآيات</div>
+          <div class="fr" style="margin-bottom:10px">
+            <div class="fg" style="margin:0">
+              <label>من الآية</label>
+              <input class="inp" type="number" id="_maf" value="1" min="1" style="text-align:center;font-size:18px;font-weight:800;color:var(--green);font-family:'Tajawal',sans-serif" dir="ltr">
+            </div>
+            <div class="fg" style="margin:0">
+              <label>إلى الآية</label>
+              <input class="inp" type="number" id="_mat" value="1" min="1" style="text-align:center;font-size:18px;font-weight:800;color:var(--green);font-family:'Tajawal',sans-serif" dir="ltr">
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div id="_ayah_info" style="font-size:12px;color:var(--text-dim)">—</div>
+            <button class="btn btn-secondary btn-xs" id="_full_surah">السورة كاملة ↩</button>
+          </div>
+        </div>
       </div>
       <div class="fr">
         <div class="fg"><label>التقييم</label>
@@ -622,19 +787,47 @@ pages.memorization = async () => {
         </div>
         <div class="fg"><label>ملاحظات</label><input class="inp" id="_mnt" placeholder="اختياري..."></div>
       </div>
-      <button class="btn btn-primary" id="_msv" style="width:100%;justify-content:center;padding:12px">💾 حفظ الجلسة</button>`;
+      <button class="btn btn-primary" id="_msv" style="width:100%;justify-content:center;padding:13px;font-size:15px">💾 حفظ الجلسة</button>`;
+
+    $('_msu').addEventListener('change', () => {
+      const opt = $('_msu').selectedOptions[0];
+      const total = Number(opt?.dataset.count || 0);
+      if (!total) { $('_ayah_wrap').style.display='none'; return; }
+      $('_ayah_wrap').style.display='block';
+      $('_maf').max=total; $('_maf').value=1;
+      $('_mat').max=total; $('_mat').value=total;
+      refreshInfo(total);
+    });
+
+    function refreshInfo(total) {
+      const from=Number($('_maf')?.value||1), to=Number($('_mat')?.value||1);
+      const cnt=Math.max(0,to-from+1), full=from===1&&to===total;
+      if($('_ayah_info')) $('_ayah_info').innerHTML=
+        `<b style="color:var(--green)">${toAr(cnt)} آية</b> ${full
+          ?'<span class="badge bg" style="margin-right:4px">✓ كاملة</span>'
+          :`<span style="color:var(--text-muted)">من ${toAr(total)}</span>`}`;
+    }
+
+    setTimeout(()=>{
+      const gT=()=>Number($('_msu').selectedOptions[0]?.dataset.count||0);
+      $('_maf')?.addEventListener('input',()=>refreshInfo(gT()));
+      $('_mat')?.addEventListener('input',()=>refreshInfo(gT()));
+      $('_full_surah')?.addEventListener('click',()=>{const t=gT();$('_maf').value=1;$('_mat').value=t;refreshInfo(t);});
+    },50);
 
     $('_msv').addEventListener('click', async () => {
-      const surah_id = Number($('_msu').value);
-      if (!surah_id) return toast('اختر السورة', 'error');
-      const btn = $('_msv'); btn.textContent = '⏳...'; btn.disabled = true;
-      await window.api.addMemorization({ student_id:id, surah_id, date:$('_md').value, grade:$('_mgr').value, notes:$('_mnt').value });
-      toast('✓ تم تسجيل جلسة الحفظ');
-      btn.textContent = '💾 حفظ الجلسة'; btn.disabled = false;
-      $('_mnt').value = '';
-      const upd = await window.api.getStudents();
-      const stu = upd.find(s=>s.id==id);
-      if (stu) { $('_mst').textContent=`${toAr(stu.memorized_count)} سورة محفوظة من ١١٤`; $('_mpb').style.width=(stu.progress||0)+'%'; $('_mpp').textContent=toAr(stu.progress||0)+'%'; }
+      const surah_id=Number($('_msu').value);
+      if(!surah_id) return toast('اختر السورة أولاً','error');
+      const ayah_from=Number($('_maf')?.value||1), ayah_to=Number($('_mat')?.value||0);
+      if(ayah_to>0&&ayah_to<ayah_from) return toast('الآية النهائية يجب أن تكون أكبر من البداية','error');
+      const btn=$('_msv'); btn.textContent='⏳ جاري الحفظ...'; btn.disabled=true;
+      await window.api.addMemorization({student_id:id,surah_id,ayah_from,ayah_to,date:$('_md').value,grade:$('_mgr').value,notes:$('_mnt').value});
+      toast('✓ تم تسجيل جلسة الحفظ بنجاح');
+      btn.textContent='💾 حفظ الجلسة'; btn.disabled=false;
+      $('_mnt').value='';
+      const upd=await window.api.getStudents();
+      const stu=upd.find(s=>s.id==id);
+      if(stu){$('_mst').textContent=`${toAr(stu.total_ayahs||0)} آية محفوظة`;$('_mpb').style.width=(stu.progress||0)+'%';$('_mpp').textContent=toAr(stu.progress||0)+'%';}
     });
   });
 };

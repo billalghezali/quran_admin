@@ -135,11 +135,16 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS memorization (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id INTEGER NOT NULL, surah_id INTEGER NOT NULL,
+      ayah_from INTEGER DEFAULT 1, ayah_to INTEGER DEFAULT 0,
       date TEXT DEFAULT (date('now')), grade TEXT, notes TEXT
     );
     CREATE TABLE IF NOT EXISTS attendance (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id INTEGER NOT NULL, date TEXT NOT NULL, status TEXT
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
     );
   `);
 
@@ -147,6 +152,9 @@ async function initDB() {
   if (!count || count.c === 0) {
     SURAHS.forEach(s => db.run('INSERT INTO surahs VALUES (?,?,?,?)', [s.id, s.name, s.ayah_count, s.juz]));
   }
+  // migration: add ayah_from/ayah_to if not exist
+  try { db.run("ALTER TABLE memorization ADD COLUMN ayah_from INTEGER DEFAULT 1"); } catch(e) {}
+  try { db.run("ALTER TABLE memorization ADD COLUMN ayah_to INTEGER DEFAULT 0"); } catch(e) {}
   saveDB();
 }
 
@@ -158,10 +166,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false
     },
-    icon: path.join(__dirname, 'icon.ico'),
     backgroundColor: '#0B1E13',
     show: false,
-    title: 'إدارة المدرسة القرآنية'
+    title: 'نظام إدارة المدرسة القرآنية'
   });
   mainWindow.loadFile('renderer/index.html');
   mainWindow.once('ready-to-show', () => mainWindow.show());
@@ -205,7 +212,15 @@ ipcMain.handle('teachers:delete', (_, id) => {
 });
 
 ipcMain.handle('students:getAll', () =>
-  query(`SELECT s.*, t.name as teacher_name, COUNT(DISTINCT m.id) as memorized_count, ROUND(COUNT(DISTINCT m.id)*100.0/114,1) as progress FROM students s LEFT JOIN teachers t ON s.teacher_id=t.id LEFT JOIN memorization m ON s.id=m.student_id GROUP BY s.id ORDER BY s.name`)
+  query(`SELECT s.*, t.name as teacher_name,
+    COUNT(DISTINCT m.surah_id) as memorized_count,
+    COALESCE(SUM(CASE WHEN m.ayah_to>0 THEN m.ayah_to-m.ayah_from+1 ELSE su.ayah_count END),0) as total_ayahs,
+    ROUND(COALESCE(SUM(CASE WHEN m.ayah_to>0 THEN m.ayah_to-m.ayah_from+1 ELSE su.ayah_count END),0)*100.0/6236,1) as progress
+    FROM students s
+    LEFT JOIN teachers t ON s.teacher_id=t.id
+    LEFT JOIN memorization m ON s.id=m.student_id
+    LEFT JOIN surahs su ON m.surah_id=su.id
+    GROUP BY s.id ORDER BY s.name`)
 );
 ipcMain.handle('students:add', (_, d) => {
   run('INSERT INTO students (name,age,phone,teacher_id,enrollment_date) VALUES (?,?,?,?,?)',
@@ -223,18 +238,36 @@ ipcMain.handle('students:delete', (_, id) => {
   run('DELETE FROM students WHERE id=?', [id]);
   return { success: true };
 });
-ipcMain.handle('students:getById', (_, id) => ({
-  student   : get(`SELECT s.*,t.name as teacher_name FROM students s LEFT JOIN teachers t ON s.teacher_id=t.id WHERE s.id=?`, [id]),
-  memorized : query(`SELECT m.*,su.name as surah_name,su.ayah_count,su.juz FROM memorization m JOIN surahs su ON m.surah_id=su.id WHERE m.student_id=? ORDER BY su.id`, [id]),
-  attendance: query(`SELECT * FROM attendance WHERE student_id=? ORDER BY date DESC LIMIT 60`, [id])
-}));
+ipcMain.handle('students:getById', (_, id) => {
+  const memorized = query(`SELECT m.*,su.name as surah_name,su.ayah_count,su.juz FROM memorization m JOIN surahs su ON m.surah_id=su.id WHERE m.student_id=? ORDER BY su.id,m.ayah_from`, [id]);
+  // حساب الآيات المحفوظة الفعلية
+  const totalAyahs = memorized.reduce((sum, m) => {
+    const from = m.ayah_from || 1;
+    const to   = m.ayah_to   || m.ayah_count;
+    return sum + (to - from + 1);
+  }, 0);
+  return {
+    student   : get(`SELECT s.*,t.name as teacher_name FROM students s LEFT JOIN teachers t ON s.teacher_id=t.id WHERE s.id=?`, [id]),
+    memorized,
+    totalAyahs,
+    attendance: query(`SELECT * FROM attendance WHERE student_id=? ORDER BY date DESC LIMIT 60`, [id])
+  };
+});
 
 ipcMain.handle('surahs:getAll', () => query('SELECT * FROM surahs ORDER BY id'));
 
 ipcMain.handle('memorization:add', (_, d) => {
-  const exists = get('SELECT id FROM memorization WHERE student_id=? AND surah_id=?', [d.student_id, d.surah_id]);
-  if (exists) run('UPDATE memorization SET date=?,grade=?,notes=? WHERE id=?', [d.date, d.grade, d.notes||'', exists.id]);
-  else run('INSERT INTO memorization (student_id,surah_id,date,grade,notes) VALUES (?,?,?,?,?)', [d.student_id, d.surah_id, d.date, d.grade, d.notes||'']);
+  // check if exact same ayah range already recorded
+  const exists = get(
+    'SELECT id FROM memorization WHERE student_id=? AND surah_id=? AND ayah_from=? AND ayah_to=?',
+    [d.student_id, d.surah_id, d.ayah_from||1, d.ayah_to||0]
+  );
+  if (exists) {
+    run('UPDATE memorization SET date=?,grade=?,notes=? WHERE id=?', [d.date, d.grade, d.notes||'', exists.id]);
+  } else {
+    run('INSERT INTO memorization (student_id,surah_id,ayah_from,ayah_to,date,grade,notes) VALUES (?,?,?,?,?,?,?)',
+      [d.student_id, d.surah_id, d.ayah_from||1, d.ayah_to||0, d.date, d.grade, d.notes||'']);
+  }
   return { success: true };
 });
 ipcMain.handle('memorization:delete', (_, id) => {
@@ -257,3 +290,25 @@ ipcMain.handle('attendance:saveAll', (_, { date, records }) => {
 ipcMain.handle('reports:allStudents', () =>
   query(`SELECT s.id, s.teacher_id, s.name, t.name as teacher_name, COUNT(DISTINCT m.id) as memorized, ROUND(COUNT(DISTINCT m.id)*100.0/114,1) as pct, COUNT(DISTINCT CASE WHEN a.status='حاضر' THEN a.id END) as present_days, COUNT(DISTINCT a.id) as total_days FROM students s LEFT JOIN teachers t ON s.teacher_id=t.id LEFT JOIN memorization m ON s.id=m.student_id LEFT JOIN attendance a ON s.id=a.student_id GROUP BY s.id ORDER BY pct DESC`)
 );
+
+// ─── كلمة سر المدير ────────────────────────────────────────────────────────────
+ipcMain.handle('admin:checkPassword', (_, pwd) => {
+  const row = get("SELECT value FROM settings WHERE key='admin_password'");
+  if (!row) {
+    // أول مرة — لا توجد كلمة سر بعد
+    return { status: 'no_password' };
+  }
+  return { status: row.value === pwd ? 'ok' : 'wrong' };
+});
+
+ipcMain.handle('admin:setPassword', (_, pwd) => {
+  const exists = get("SELECT key FROM settings WHERE key='admin_password'");
+  if (exists) run("UPDATE settings SET value=? WHERE key='admin_password'", [pwd]);
+  else run("INSERT INTO settings (key,value) VALUES ('admin_password',?)", [pwd]);
+  return { success: true };
+});
+
+ipcMain.handle('admin:hasPassword', () => {
+  const row = get("SELECT value FROM settings WHERE key='admin_password'");
+  return { has: !!row };
+});
