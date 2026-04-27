@@ -155,6 +155,11 @@ async function initDB() {
   // migration: add ayah_from/ayah_to if not exist
   try { db.run("ALTER TABLE memorization ADD COLUMN ayah_from INTEGER DEFAULT 1"); } catch(e) {}
   try { db.run("ALTER TABLE memorization ADD COLUMN ayah_to INTEGER DEFAULT 0"); } catch(e) {}
+  // migration: add parent info to students
+  try { db.run("ALTER TABLE students ADD COLUMN parent_name TEXT DEFAULT ''"); } catch(e) {}
+  try { db.run("ALTER TABLE students ADD COLUMN birthdate TEXT DEFAULT ''"); } catch(e) {}
+  try { db.run("ALTER TABLE students ADD COLUMN parent_phone TEXT DEFAULT ''"); } catch(e) {}
+  try { db.run("ALTER TABLE students ADD COLUMN parent_relation TEXT DEFAULT ''"); } catch(e) {}
   saveDB();
 }
 
@@ -166,9 +171,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false
     },
-    icon: path.join(__dirname, 'icon.ico')
-    ,
-    backgroundColor: '#0B1E13',
+    backgroundColor: '#f0f4f8',
+    icon: path.join(__dirname, 'icon.ico'),
     show: false,
     title: 'نظام إدارة المدرسة القرآنية'
   });
@@ -225,13 +229,15 @@ ipcMain.handle('students:getAll', () =>
     GROUP BY s.id ORDER BY s.name`)
 );
 ipcMain.handle('students:add', (_, d) => {
-  run('INSERT INTO students (name,age,phone,teacher_id,enrollment_date) VALUES (?,?,?,?,?)',
-    [d.name, d.age||null, d.phone||'', d.teacher_id||null, d.enrollment_date||today()]);
+  run('INSERT INTO students (name,age,birthdate,phone,teacher_id,enrollment_date,parent_name,parent_phone,parent_relation) VALUES (?,?,?,?,?,?,?,?,?)',
+    [d.name, d.age||null, d.birthdate||'', d.phone||'', d.teacher_id||null, d.enrollment_date||today(),
+     d.parent_name||'', d.parent_phone||'', d.parent_relation||'']);
   return { success: true };
 });
 ipcMain.handle('students:update', (_, d) => {
-  run('UPDATE students SET name=?,age=?,phone=?,teacher_id=?,enrollment_date=? WHERE id=?',
-    [d.name, d.age||null, d.phone||'', d.teacher_id||null, d.enrollment_date, d.id]);
+  run('UPDATE students SET name=?,age=?,birthdate=?,phone=?,teacher_id=?,enrollment_date=?,parent_name=?,parent_phone=?,parent_relation=? WHERE id=?',
+    [d.name, d.age||null, d.birthdate||'', d.phone||'', d.teacher_id||null, d.enrollment_date,
+     d.parent_name||'', d.parent_phone||'', d.parent_relation||'', d.id]);
   return { success: true };
 });
 ipcMain.handle('students:delete', (_, id) => {

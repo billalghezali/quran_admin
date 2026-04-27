@@ -539,11 +539,11 @@ pages.students = async () => {
 
   const render = list => {
     $('_st').innerHTML = list.length ? `<div class="tw"><table>
-      <thead><tr><th>#</th><th>الطالب</th><th>العمر</th>${isAdmin?'<th>الأستاذ</th>':''}<th>التقدم</th><th>السور</th><th>إجراءات</th></tr></thead>
+      <thead><tr><th>#</th><th>الطالب</th><th>تاريخ الميلاد</th>${isAdmin?'<th>الأستاذ</th>':''}<th>التقدم</th><th>السور</th><th>إجراءات</th></tr></thead>
       <tbody>${list.map((s,i) => `<tr>
         <td><span class="badge bk">${toAr(i+1)}</span></td>
         <td><div class="td-name">${s.name}</div>${s.phone?`<div class="td-sub">📞 ${s.phone}</div>`:''}</td>
-        <td>${s.age?`<span class="badge bk">${toAr(s.age)} سنة`:'—'}</td>
+        <td>${s.birthdate?`<span class="badge bk">📅 ${s.birthdate}</span>`:'—'}</td>
         ${isAdmin?`<td>${s.teacher_name?`<span class="badge bb">${s.teacher_name}</span>`:'—'}</td>`:''}
         <td><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${s.progress||0}%"></div></div><span class="prog-pct">${toAr(s.progress||0)}%</span></div></td>
         <td><span class="badge bg">${toAr(s.memorized_count)}</span></td>
@@ -589,8 +589,8 @@ pages.students = async () => {
     const visible = students.filter(s => !SESSION.id || s.teacher_id == SESSION.id);
     doPrint(`
       <div class="ph"><h1>قائمة الطلاب${!isAdmin?' — '+SESSION.name:''}</h1><p>المدرسة القرآنية — ${getMiladi()} | ${getHijri()}</p></div>
-      <table><thead><tr><th>#</th><th>الاسم</th><th>العمر</th><th>الأستاذ</th><th>السور</th><th>التقدم</th><th>الالتحاق</th></tr></thead>
-      <tbody>${visible.map((s,i)=>`<tr><td>${i+1}</td><td>${s.name}</td><td>${s.age||'—'}</td><td>${s.teacher_name||'—'}</td><td>${s.memorized_count}/114</td><td>${s.progress||0}%</td><td>${s.enrollment_date||'—'}</td></tr>`, 'قائمة الطلاب').join('')}</tbody></table>
+      <table><thead><tr><th>#</th><th>الاسم</th><th>تاريخ الميلاد</th><th>الأستاذ</th><th>السور</th><th>التقدم</th><th>الالتحاق</th></tr></thead>
+      <tbody>${visible.map((s,i)=>`<tr><td>${i+1}</td><td>${s.name}</td><td>${s.birthdate||'—'}</td><td>${s.teacher_name||'—'}</td><td>${s.memorized_count}/114</td><td>${s.progress||0}%</td><td>${s.enrollment_date||'—'}</td></tr>`, 'قائمة الطلاب').join('')}</tbody></table>
       <div class="pf">الإجمالي: ${visible.length} طالب — متوسط التقدم: ${visible.length?Math.round(visible.reduce((a,s)=>a+(s.progress||0),0)/visible.length):0}%</div>`);
   });
 
@@ -603,14 +603,36 @@ pages.students = async () => {
 function studentModal(data, teachers, onDone) {
   const opts = teachers.map(t=>`<option value="${t.id}" ${data?.teacher_id==t.id?'selected':''}>${t.name}</option>`).join('');
   openModal(data ? 'تعديل الطالب' : 'إضافة طالب', `
-    <div class="fg"><label>الاسم الكامل *</label><input class="inp" id="_sn" value="${data?.name||''}" placeholder="أدخل الاسم"></div>
-    <div class="fr">
-      <div class="fg"><label>العمر</label><input class="inp" type="number" id="_sa" value="${data?.age||''}" min="4" max="99"></div>
-      <div class="fg"><label>هاتف ولي الأمر</label><input class="inp" id="_sp" value="${data?.phone||''}"></div>
+    <!-- ── معلومات الطالب ── -->
+    <div style="background:var(--surface2);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:14px;border:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">👤 معلومات الطالب</div>
+      <div class="fg"><label>الاسم الكامل *</label><input class="inp" id="_sn" value="${data?.name||''}" placeholder="أدخل الاسم الكامل للطالب"></div>
+      <div class="fr">
+        <div class="fg"><label>تاريخ الميلاد</label><input class="inp" type="date" id="_sb" value="${data?.birthdate||''}"></div>
+        <div class="fg"><label>تاريخ الالتحاق</label><input class="inp" type="date" id="_sd" value="${data?.enrollment_date||new Date().toISOString().split('T')[0]}"></div>
+      </div>
+      <div class="fg" style="margin:0"><label>الأستاذ المشرف</label><select class="inp" id="_st2"><option value="">— بدون أستاذ —</option>${opts}</select></div>
     </div>
-    <div class="fr">
-      <div class="fg"><label>الأستاذ</label><select class="inp" id="_st2"><option value="">— بدون أستاذ —</option>${opts}</select></div>
-      <div class="fg"><label>تاريخ الالتحاق</label><input class="inp" type="date" id="_sd" value="${data?.enrollment_date||new Date().toISOString().split('T')[0]}"></div>
+
+    <!-- ── بيانات ولي الأمر ── -->
+    <div style="background:var(--blue-p);border-radius:var(--r-sm);padding:14px 16px;border:1px solid rgba(58,123,213,.15)">
+      <div style="font-size:11px;font-weight:700;color:var(--blue);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">👨‍👩‍👦 بيانات ولي الأمر</div>
+      <div class="fr">
+        <div class="fg"><label>اسم ولي الأمر</label><input class="inp" id="_pn" value="${data?.parent_name||''}" placeholder="الاسم الكامل"></div>
+        <div class="fg"><label>صلة القرابة</label>
+          <select class="inp" id="_pr">
+            <option value="">— اختر —</option>
+            <option value="الأب"   ${data?.parent_relation==='الأب'  ?'selected':''}>الأب</option>
+            <option value="الأم"   ${data?.parent_relation==='الأم'  ?'selected':''}>الأم</option>
+            <option value="الأخ"   ${data?.parent_relation==='الأخ'  ?'selected':''}>الأخ</option>
+            <option value="الأخت"  ${data?.parent_relation==='الأخت' ?'selected':''}>الأخت</option>
+            <option value="العم"   ${data?.parent_relation==='العم'  ?'selected':''}>العم</option>
+            <option value="الجد"   ${data?.parent_relation==='الجد'  ?'selected':''}>الجد</option>
+            <option value="ولي أمر"${data?.parent_relation==='ولي أمر'?'selected':''}>ولي أمر</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg" style="margin:0"><label>رقم هاتف ولي الأمر</label><input class="inp" id="_pp2" value="${data?.parent_phone||''}" placeholder="0xx xxx xxxx"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
       <button class="btn btn-secondary" id="_c">إلغاء</button>
@@ -620,7 +642,8 @@ function studentModal(data, teachers, onDone) {
   $('_sv').addEventListener('click', async () => {
     const name = $('_sn').value.trim();
     if (!name) return toast('الاسم مطلوب', 'error');
-    const d = { name, age:$('_sa').value||null, phone:$('_sp').value, teacher_id:$('_st2').value||null, enrollment_date:$('_sd').value };
+    const d = { name, birthdate:$('_sb')?.value||'', teacher_id:$('_st2').value||null, enrollment_date:$('_sd').value,
+      parent_name:$('_pn').value, parent_phone:$('_pp2').value, parent_relation:$('_pr').value };
     data ? await window.api.updateStudent({...d,id:data.id}) : await window.api.addStudent(d);
     toast(data?'تم التحديث ✓':'تم الإضافة ✓'); closeModal(); onDone();
   });
@@ -638,6 +661,14 @@ async function openProfile(id) {
   const pct = Math.round(totalAyahs*100/6236);
 
   // achievements
+  // حساب العمر من تاريخ الميلاد
+  let ageStr = '';
+  if (s.birthdate) {
+    const diff = new Date() - new Date(s.birthdate);
+    const age = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+    ageStr = `${toAr(age)} سنة`;
+  }
+
   const ach = [];
   if (memorized.length >= 10)  ach.push('🌟 حفظ ١٠ سور');
   if (memorized.length >= 30)  ach.push('🏅 حفظ ٣٠ سورة');
@@ -651,13 +682,23 @@ async function openProfile(id) {
       <div style="flex:1">
         <div class="prof-name">${s.name}</div>
         <div class="prof-meta">
-          ${s.age?`العمر: ${toAr(s.age)} سنة &nbsp;|&nbsp; `:''}
-          ${s.teacher_name?`الأستاذ: ${s.teacher_name} &nbsp;|&nbsp; `:''}
-          ${s.phone?`📞 ${s.phone}`:''}
+          ${s.birthdate?`تاريخ الميلاد: ${s.birthdate} &nbsp;|&nbsp; `:''}
+          ${s.teacher_name?`الأستاذ: ${s.teacher_name}`:''}
         </div>
         ${ach.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${ach.map(a=>`<span class="ach">${a}</span>`).join('')}</div>`:''}
       </div>
     </div>
+
+    ${(s.parent_name||s.parent_phone) ? `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px">
+      <div style="width:42px;height:42px;border-radius:50%;background:var(--blue-p);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">👨‍👩‍👦</div>
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">ولي الأمر</div>
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${s.parent_name||'—'} ${s.parent_relation?`<span class="badge bb" style="font-size:11px">${s.parent_relation}</span>`:''}</div>
+        ${s.parent_phone?`<div style="font-size:13px;color:var(--text-dim);margin-top:2px">📞 ${s.parent_phone}</div>`:''}
+      </div>
+
+    </div>` : ''}
 
     <div class="prof-stats">
       <div class="pst"><div class="pst-v">${toAr(totalAyahs)}</div><div class="pst-l">آية محفوظة من ٦٢٣٦</div></div>

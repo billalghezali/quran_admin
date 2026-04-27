@@ -18,6 +18,7 @@
       "preload.js",
       "renderer/**",
       "package.json",
+      "icon.ico",
       "node_modules/**",
       "!node_modules/*/{CHANGELOG.md,README.md,readme.md}",
       "!node_modules/*/{test,__tests__,tests,example,examples}",
@@ -25,15 +26,23 @@
       "!node_modules/**/*.md"
     ],
     "win": {
-      "target": [
-        { "target": "nsis",     "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
-      ],
+      "target": {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      "icon": "icon.ico",
       "compression": "maximum"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "المدرسة القرآنية",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico",
+      "license": null
     }
   },
   "dependencies": {
