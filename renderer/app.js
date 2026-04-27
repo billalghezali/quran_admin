@@ -855,21 +855,31 @@ pages.memorization = async () => {
           : `<span style="color:var(--text-muted)">من ${toAr(total)}</span>`}`;
     }
 
-    // تحويل المدخل لأرقام عربية أثناء الكتابة
-    function arabicInput(el, max) {
-      el.addEventListener('input', () => {
-        const raw = fromAr(el.value).replace(/\D/g,'');
-        let num = Math.max(1, Math.min(Number(raw)||1, max));
-        el.value = toAr(num);
-      });
-    }
-
     setTimeout(()=>{
       const gT = () => Number($('_msu').selectedOptions[0]?.dataset.count||0);
-      arabicInput($('_maf'), gT());
-      arabicInput($('_mat'), gT());
-      $('_maf')?.addEventListener('input', () => refreshInfo(gT()));
-      $('_mat')?.addEventListener('input', () => refreshInfo(gT()));
+
+      // عند الانتهاء من الكتابة فقط نتحقق من الحد
+      function validateOnBlur(el, isFrom) {
+        el.addEventListener('blur', () => {
+          const total = gT();
+          if (!total) return;
+          let num = Number(fromAr(el.value)) || (isFrom ? 1 : total);
+          num = Math.max(1, Math.min(num, total));
+          el.value = toAr(num);
+          // تحقق من أن "من" لا تتجاوز "إلى"
+          const from = Number(fromAr($('_maf').value)||1);
+          const to   = Number(fromAr($('_mat').value)||total);
+          if (isFrom && from > to) $('_mat').value = toAr(Math.min(from, total));
+          if (!isFrom && to < from) $('_maf').value = toAr(Math.max(1, to));
+          refreshInfo(total);
+        });
+        // تحديث المعلومات أثناء الكتابة بدون تقييد
+        el.addEventListener('input', () => refreshInfo(gT()));
+      }
+
+      validateOnBlur($('_maf'), true);
+      validateOnBlur($('_mat'), false);
+
       $('_full_surah')?.addEventListener('click', () => {
         const t = gT();
         $('_maf').value = toAr(1);

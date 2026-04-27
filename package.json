@@ -1,11 +1,11 @@
 {
   "name": "quran-school-manager",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "نظام إدارة المدرسة القرآنية",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder --win nsis"
   },
   "build": {
     "appId": "com.quran.school",
@@ -26,12 +26,8 @@
       "!node_modules/**/*.md"
     ],
     "win": {
-      "target": {
-        "target": "nsis",
-        "arch": ["x64"]
-      },
-      "icon": "icon.ico",
-      "compression": "maximum"
+      "target": "nsis",
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -40,9 +36,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "المدرسة القرآنية",
       "installerIcon": "icon.ico",
-      "uninstallerIcon": "icon.ico",
-      "installerHeaderIcon": "icon.ico",
-      "license": null
+      "uninstallerIcon": "icon.ico"
     }
   },
   "dependencies": {
